@@ -74,7 +74,6 @@ final class SessionController {
         let remote = AppleTranscriber()
         let me = AppleTranscriber()
         do {
-            let store = try TranscriptStore()
             let format = try await remote.prepare()
             _ = try await me.prepare()
             let capture = AudioCapture(
@@ -83,14 +82,18 @@ final class SessionController {
                 onBuffer: { speaker, buffer in (speaker == .remote ? remote : me).append(buffer) },
                 onError: { [weak self] error in Task { @MainActor in await self?.captureFailed(error) } })
             try await capture.start()
-            self.store = store
+            // 캡처가 실제로 시작된 뒤에 폴더를 만들어, 실패한 시작이 빈 미팅으로 남지 않게 한다.
+            do {
+                store = try TranscriptStore()
+            } catch {
+                await capture.stop()
+                throw error
+            }
             self.capture = capture
             transcribers = [.remote: remote, .me: me]
         } catch {
             await remote.finish()
             await me.finish()
-            if let store { await store.update { $0.state = .failed } }
-            store = nil
             state = .idle
             errorMessage = error.localizedDescription
             return
