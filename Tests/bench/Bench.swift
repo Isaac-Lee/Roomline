@@ -1,8 +1,6 @@
 import AVFoundation
 import Foundation
 
-// AudioCapture.swift가 요구하는 타입 (Models.swift 대신 최소 스텁)
-
 /// 소문자, 구두점 제거, 공백 정리.
 func normalizeWords(_ s: String) -> [String] {
     s.lowercased().map { $0.isLetter || $0.isNumber || $0 == " " || $0 == "\n" || $0 == "'" ? $0 : " " }
