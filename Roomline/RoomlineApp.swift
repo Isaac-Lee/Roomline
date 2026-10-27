@@ -9,6 +9,14 @@ struct RoomlineApp: App {
             if let error = session.errorMessage {
                 Text(error)
             }
+            if session.translationMissing {
+                Text("한국어 번역 언어팩이 없어 자막만 표시합니다.")
+                Button("번역 언어 설치하기…") {
+                    // 언어 및 지역 > 번역 언어
+                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Localization-Settings.extension")!)
+                }
+                Button("설치 다시 확인") { Task { await session.refreshTranslationAvailability() } }
+            }
             switch session.state {
             case .idle:
                 Button("자막 시작") { Task { await session.start() } }
