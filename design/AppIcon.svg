@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4C5BF0"/>
+      <stop offset="1" stop-color="#22207A"/>
+    </linearGradient>
+    <linearGradient id="wave" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFB27A"/>
+      <stop offset="1" stop-color="#FF6B5B"/>
+    </linearGradient>
+  </defs>
+  <!-- macOS icon grid: 824pt body on 1024 canvas, drop shadow below -->
+  <rect id="shadow" x="100" y="112" width="824" height="824" rx="185" fill="#000" fill-opacity="0.22"/>
+  <rect id="body" x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+  <g id="wave" fill="url(#wave)">
+    <rect x="232" y="442" width="44" height="140" rx="22"/>
+    <rect x="300" y="382" width="44" height="260" rx="22"/>
+    <rect x="368" y="422" width="44" height="180" rx="22"/>
+  </g>
+  <g id="caption" fill="#FFFFFF">
+    <rect x="456" y="438" width="336" height="52" rx="26"/>
+    <rect x="456" y="534" width="248" height="52" rx="26" fill-opacity="0.7"/>
+  </g>
+</svg>

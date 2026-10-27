@@ -37,7 +37,7 @@ struct NotesGenerator {
             for (index, chunk) in chunks.enumerated() {
                 await progress("구간 요약 \(index + 1)/\(chunks.count)…")
                 let range = "\(Self.clock(chunk.first!.segment.start))~\(Self.clock(chunk.last!.segment.end))"
-                let summary = try await chat(system: Self.mapPrompt, user: "[\(range)]\n\(Self.format(chunk))", unload: false)
+                let summary = try await chat(system: Self.mapPrompt, user: "[\(range)]\n\(Self.format(chunk))", unload: false, maxTokens: 500)
                 summaries.append("### \(range)\n\(summary)")
             }
             material = summaries.joined(separator: "\n\n")
@@ -45,7 +45,7 @@ struct NotesGenerator {
 
         await progress("최종 노트 작성 중…")
         // 마지막 호출에서 keep_alive 0으로 모델을 내린다.
-        let body = try await chat(system: Self.reducePrompt, user: material, unload: true)
+        let body = try await chat(system: Self.reducePrompt, user: material, unload: true, maxTokens: 1500)
 
         let date = meta.startedAt.formatted(date: .long, time: .shortened)
         let duration = Int((meta.endedAt ?? meta.startedAt).timeIntervalSince(meta.startedAt) / 60)
@@ -62,7 +62,7 @@ struct NotesGenerator {
 
     static func format(_ lines: [TranscriptLine]) -> String {
         lines.map { line in
-            "[\(clock(line.segment.start))] \(line.segment.speaker == .remote ? "상대" : "나"): \(line.segment.text)"
+            "[\(clock(line.segment.start))] \(line.speakerName): \(line.segment.text)"
         }
         .joined(separator: "\n")
     }
@@ -80,7 +80,7 @@ struct NotesGenerator {
         let error: String?
     }
 
-    private func chat(system: String, user: String, unload: Bool) async throws -> String {
+    private func chat(system: String, user: String, unload: Bool, maxTokens: Int) async throws -> String {
         var request = URLRequest(url: Self.endpoint, timeoutInterval: 600)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -91,7 +91,8 @@ struct NotesGenerator {
                 ["role": "system", "content": system],
                 ["role": "user", "content": user],
             ],
-            "options": ["temperature": 0.2, "num_ctx": 8192],
+            // num_predict: 장황한 출력이 시간을 다 잡아먹는 것을 막는다.
+            "options": ["temperature": 0.2, "num_ctx": 8192, "num_predict": maxTokens],
         ]
         if unload { body["keep_alive"] = 0 }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -116,19 +117,20 @@ struct NotesGenerator {
     // MARK: 프롬프트
 
     static let mapPrompt = """
-    너는 회의록 작성자다. 사용자가 영어 회의 전사의 한 구간을 준다. "상대"는 상대방들, "나"는 노트 주인이다.
-    이 구간에서 나온 내용을 한국어 bullet로만 정리해라. 전사에 없는 내용은 지어내지 마라.
-    - 핵심 논의
-    - 결정사항
-    - 액션아이템 (누가, 무엇을, 언제까지 — 전사에 있는 만큼만)
-    - 결론이 나지 않은 논의
-    해당 없는 항목은 생략해라.
+    너는 회의록 작성자다. 사용자가 영어 또는 한국어 회의 전사의 한 구간을 준다. "나"는 노트 주인이고, 그 밖의 화자 이름("상대", "상대 2", 실제 이름)은 상대방이다.
+    이 구간에서 구체적으로 합의·결정된 것과 담당자·기한이 있는 할 일만 한국어 bullet로 정리해라. 잡담·반복·추측은 버리고, 전사에 없는 내용은 절대 지어내지 마라.
+    형식(해당 없는 항목은 생략, 전체 15줄 이내, 한 줄은 짧게):
+    - 논의: 핵심 주제 1~3줄
+    - 결정: …
+    - 액션: 이름 — 할 일 (기한)
+    - 미해결: …
+    이름 자리에는 실제 담당자("나", 전사에 나온 이름, 모르면 "상대")를 쓴다.
     """
 
     static let reducePrompt = """
-    너는 회의록 작성자다. 사용자가 영어 회의 전사 또는 구간별 요약을 준다. "상대"는 상대방들, "나"는 노트 주인이다.
-    전체를 합쳐 아래 형식의 한국어 Markdown 미팅 노트만 출력해라. 전사에 없는 내용은 지어내지 말고, 중복은 합쳐라.
-    고유명사·제품명·숫자는 원문 그대로 둔다.
+    너는 회의록 작성자다. 사용자가 영어 또는 한국어 회의 전사, 혹은 구간별 요약을 준다. "나"는 노트 주인이고, 그 밖의 화자 이름("상대", "상대 2", 실제 이름)은 상대방이다.
+    전체를 하나로 합쳐 아래 형식의 한국어 Markdown 미팅 노트만 출력해라. 구간별로 나누지 말고, 같은 내용은 하나로 합치고, 전사에 없는 내용은 지어내지 마라.
+    잡담성 반복은 버리고 결정·할 일·미해결만 남긴다. 고유명사·제품명·숫자·날짜는 원문 그대로 둔다. 액션아이템의 "이름"은 "담당자"라는 글자가 아니라 실제 사람("나", 요약에 나온 이름)으로 채운다.
 
     ## 요약
     3~6줄 문단
@@ -137,7 +139,7 @@ struct NotesGenerator {
     - …
 
     ## 액션아이템
-    - [ ] 담당자: 할 일 (기한)
+    - [ ] 이름: 할 일 (기한)
 
     ## 미해결 논의
     - …
