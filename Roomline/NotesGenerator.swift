@@ -26,6 +26,7 @@ struct NotesGenerator {
         lines: [TranscriptLine],
         progress: @MainActor (String) -> Void
     ) async throws -> String {
+        let lines = Self.condense(lines)
         guard !lines.isEmpty else { throw NotesError.emptyTranscript }
         let chunks = Self.chunks(lines)
 
@@ -53,6 +54,27 @@ struct NotesGenerator {
     }
 
     // MARK: 전사 가공
+
+    private static let fillers: Set<String> = ["uh", "um", "uhm", "hmm", "mm", "ah", "er", "음", "어"]
+
+    /// 정보량 낮은 줄(필러 제외 3단어 미만, 숫자 없음)을 버리고, 같은 화자의 연속 줄은 한 줄로 합친다.
+    static func condense(_ lines: [TranscriptLine]) -> [TranscriptLine] {
+        var out: [TranscriptLine] = []
+        for line in lines {
+            let text = line.segment.text
+            let words = text.split { !$0.isLetter && !$0.isNumber && $0 != "'" }.filter { !fillers.contains($0.lowercased()) }
+            guard words.count >= 3 || text.contains(where: \.isNumber) else { continue }
+            if var last = out.last, last.speakerName == line.speakerName {
+                let s = last.segment
+                last = TranscriptLine(segment: Segment(id: s.id, speaker: s.speaker, start: s.start, end: line.segment.end, text: s.text + " " + text),
+                                      remoteSpeaker: last.remoteSpeaker, remoteSpeakerName: last.remoteSpeakerName)
+                out[out.count - 1] = last
+            } else {
+                out.append(line)
+            }
+        }
+        return out
+    }
 
     static func chunks(_ lines: [TranscriptLine]) -> [[TranscriptLine]] {
         Dictionary(grouping: lines) { Int($0.segment.start / chunkDuration) }
@@ -87,6 +109,7 @@ struct NotesGenerator {
         var body: [String: Any] = [
             "model": model,
             "stream": false,
+            "think": false,   // 추론형 모델(qwen3 등)의 사고 단계를 끈다. 미지원 모델은 무시.
             "messages": [
                 ["role": "system", "content": system],
                 ["role": "user", "content": user],
@@ -122,15 +145,15 @@ struct NotesGenerator {
     형식(해당 없는 항목은 생략, 전체 15줄 이내, 한 줄은 짧게):
     - 논의: 핵심 주제 1~3줄
     - 결정: …
-    - 액션: 이름 — 할 일 (기한)
+    - 액션: Sarah — 가격 정책 초안 공유 (11월 5일)
     - 미해결: …
-    이름 자리에는 실제 담당자("나", 전사에 나온 이름, 모르면 "상대")를 쓴다.
+    액션의 담당자는 전사에 나온 실제 이름으로 쓴다. 노트 주인이면 "나", 모르면 "상대".
     """
 
     static let reducePrompt = """
     너는 회의록 작성자다. 사용자가 영어 또는 한국어 회의 전사, 혹은 구간별 요약을 준다. "나"는 노트 주인이고, 그 밖의 화자 이름("상대", "상대 2", 실제 이름)은 상대방이다.
     전체를 하나로 합쳐 아래 형식의 한국어 Markdown 미팅 노트만 출력해라. 구간별로 나누지 말고, 같은 내용은 하나로 합치고, 전사에 없는 내용은 지어내지 마라.
-    잡담성 반복은 버리고 결정·할 일·미해결만 남긴다. 고유명사·제품명·숫자·날짜는 원문 그대로 둔다. 액션아이템의 "이름"은 "담당자"라는 글자가 아니라 실제 사람("나", 요약에 나온 이름)으로 채운다.
+    잡담성 반복은 버리고 결정·할 일·미해결만 남긴다. 고유명사·제품명·숫자·날짜는 원문 그대로 둔다. 액션아이템은 명시적으로 맡은 일만 쓰고(최대 10개, 같은 일은 하나로), 담당자는 전사·요약에 나온 실제 이름으로 쓴다. 노트 주인이면 "나". 담당자가 불분명한 일은 액션아이템에 넣지 말고 미해결에 둔다.
 
     ## 요약
     3~6줄 문단
@@ -139,7 +162,8 @@ struct NotesGenerator {
     - …
 
     ## 액션아이템
-    - [ ] 이름: 할 일 (기한)
+    - [ ] Sarah: 가격 정책 초안 공유 (11월 5일)
+    (위 줄은 형식 예시일 뿐이니 절대 출력하지 마라. 내용은 전사·요약에서만 가져오고, 기한을 모르면 생략한다.)
 
     ## 미해결 논의
     - …

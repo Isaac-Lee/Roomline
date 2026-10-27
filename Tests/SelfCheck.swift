@@ -53,6 +53,16 @@ struct SelfCheck {
         assert(NotesGenerator.format([long[11]]) == "[11:00] 상대: s11")
         assert(NotesGenerator.stripThinking("<think>hmm</think>\n## 요약") == "## 요약")
 
+        // 2b. 저정보 줄 제거 + 같은 화자 병합
+        func line(_ sp: Speaker, _ t: Double, _ text: String) -> TranscriptLine {
+            TranscriptLine(segment: Segment(id: UUID(), speaker: sp, start: t, end: t + 2, text: text))
+        }
+        let cond = NotesGenerator.condense([
+            line(.remote, 0, "We ship on Tuesday."), line(.me, 3, "Um, okay."), line(.remote, 5, "Fair point."),
+            line(.remote, 8, "Budget is 5k."), line(.me, 10, "I agree."), line(.me, 12, "11월 5일")])
+        assert(cond.map(\.segment.text) == ["We ship on Tuesday. Budget is 5k.", "11월 5일"], "저정보 제거/병합 \(cond.map(\.segment.text))")
+        assert(cond[0].segment.start == 0 && cond[0].segment.end == 10, "병합 시간")
+
         // 3. 에코 중복 판별
         let remoteText = "I think we can do one that might be fun, if we have a little bit of time."
         assert(EchoDedup.isEcho(me: "Uh, and I might be able to do one that might be fun.", remote: remoteText), "에코 제거")
