@@ -57,6 +57,8 @@ private struct MeetingDetail: View {
     @State private var lines: [TranscriptLine] = []
     @State private var diarizing = false
     @State private var diarizeError: String?
+    @State private var names: [Int: String] = [:]
+    @State private var namesChanged = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -70,6 +72,24 @@ private struct MeetingDetail: View {
                     .disabled(session.state != .idle || lines.isEmpty)
             }
             if let diarizeError { Text(diarizeError).font(.caption).foregroundStyle(.red) }
+            if !speakerNumbers.isEmpty {
+                HStack {
+                    Text("화자").font(.caption).foregroundStyle(.secondary)
+                    ForEach(speakerNumbers, id: \.self) { n in
+                        TextField("상대 \(n)", text: Binding(get: { names[n] ?? "" }, set: { names[n] = $0 }))
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: 120)
+                            .onSubmit { rename(n) }
+                    }
+                    if namesChanged {
+                        Button("이름을 반영해 노트 다시 만들기") {
+                            namesChanged = false
+                            Task { await session.regenerateNotes(record) }
+                        }
+                        .disabled(session.state != .idle)
+                    }
+                }
+            }
             Picker("", selection: $tab) {
                 Text("노트").tag(0)
                 Text("전사 (\(lines.count))").tag(1)
@@ -107,7 +127,16 @@ private struct MeetingDetail: View {
         .task(id: session.state) {
             notes = try? String(contentsOf: record.notesURL, encoding: .utf8)
             lines = TranscriptStore.loadTranscript(in: record.folder)
+            names = TranscriptStore.readMeta(in: record.folder)?.speakerNames ?? [:]
         }
+    }
+
+    private var speakerNumbers: [Int] { Array(Set(lines.compactMap(\.remoteSpeaker))).sorted() }
+
+    private func rename(_ n: Int) {
+        try? VoiceProfiles.assign(speaker: n, name: names[n] ?? "", in: record.folder)
+        lines = TranscriptStore.loadTranscript(in: record.folder)
+        namesChanged = true
     }
 
     private static let palette: [Color] = [.blue, .purple, .orange, .pink, .teal, .brown]
@@ -123,6 +152,7 @@ private struct MeetingDetail: View {
         Task {
             do { _ = try await Diarizer.labelSpeakers(folder: record.folder) } catch { diarizeError = error.localizedDescription }
             lines = TranscriptStore.loadTranscript(in: record.folder)
+            names = TranscriptStore.readMeta(in: record.folder)?.speakerNames ?? [:]
             diarizing = false
         }
     }

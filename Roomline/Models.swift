@@ -24,4 +24,5 @@ struct MeetingMeta: Codable {
     let startedAt: Date
     var endedAt: Date?
     var state: MeetingState
+    var speakerNames: [Int: String]?   // 사용자가 붙인 상대 화자 이름(화자 번호 → 이름)
 }

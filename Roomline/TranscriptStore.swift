@@ -11,8 +11,10 @@ struct TranscriptLine: Identifiable {
     let segment: Segment
     var translation: String?
     var remoteSpeaker: Int?   // 화자 구분 결과(1부터)
+    var remoteSpeakerName: String?   // 미팅에서 사용자가 붙인 이름
     var speakerName: String {
         if segment.speaker == .me { return "나" }
+        if let remoteSpeakerName { return remoteSpeakerName }
         return remoteSpeaker.map { "상대 \($0)" } ?? "상대"
     }
     var id: UUID { segment.id }
@@ -109,6 +111,9 @@ actor TranscriptStore {
             case .speakerLabel(let id, let speaker):
                 if let index = indexByID[id] { lines[index].remoteSpeaker = speaker }
             }
+        }
+        if let names = readMeta(in: folder)?.speakerNames {
+            for i in lines.indices { lines[i].remoteSpeakerName = lines[i].remoteSpeaker.flatMap { names[$0] } }
         }
         return lines.sorted { $0.segment.start < $1.segment.start }
     }
