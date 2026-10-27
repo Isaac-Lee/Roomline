@@ -1,6 +1,6 @@
 import AVFoundation
-import CoreGraphics
 import Observation
+import ScreenCaptureKit
 import Speech
 
 enum SettingsKey {
@@ -61,10 +61,9 @@ final class SessionController {
     func start() async {
         guard state == .idle else { return }
         errorMessage = nil
-        guard CGPreflightScreenCaptureAccess() else {
-            CGRequestScreenCaptureAccess()
-            errorMessage = "시스템 설정 > 개인정보 보호 및 보안 > 화면 및 시스템 오디오 녹화에서 Roomline을 허용한 뒤 앱을 다시 실행하세요."
-            return
+        // 마이크 권한이 미결정이면 먼저 요청한다.
+        if AVCaptureDevice.authorizationStatus(for: .audio) == .notDetermined {
+            _ = await AVCaptureDevice.requestAccess(for: .audio)
         }
         guard AVCaptureDevice.authorizationStatus(for: .audio) == .authorized else {
             errorMessage = "시스템 설정 > 개인정보 보호 및 보안 > 마이크에서 Roomline을 허용하세요."
@@ -109,7 +108,11 @@ final class SessionController {
             // 실패한 시작이 빈 미팅으로 남지 않게 지운다.
             if let folder = newStore?.folder { try? FileManager.default.removeItem(at: folder) }
             state = .idle
-            errorMessage = error.localizedDescription
+            // 화면 녹화 권한은 캡처 시작 시 시스템이 묻고, 거부되면 여기로 온다.
+            let e = error as NSError
+            errorMessage = e.domain == SCStreamErrorDomain && e.code == SCStreamError.userDeclined.rawValue
+                ? "시스템 설정 > 개인정보 보호 및 보안 > 화면 및 시스템 오디오 녹화에서 Roomline을 허용한 뒤 앱을 다시 실행하세요."
+                : error.localizedDescription
             return
         }
 
