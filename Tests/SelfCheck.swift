@@ -44,13 +44,13 @@ struct SelfCheck {
         assert((try? JSONDecoder.iso.decode(MeetingMeta.self, from: Data(old.utf8)))?.speakerNames == nil, "옛 meta 호환")
         try FileManager.default.removeItem(at: store2.folder)
 
-        // 2. 10분 단위 구간 나누기
+        // 2. 60분 단위 구간 나누기
         let long = (0..<25).map { i in
-            TranscriptLine(segment: Segment(id: UUID(), speaker: .remote, start: Double(i * 60), end: Double(i * 60 + 5), text: "s\(i)"))
+            TranscriptLine(segment: Segment(id: UUID(), speaker: .remote, start: Double(i * 360), end: Double(i * 360 + 5), text: "s\(i)"))
         }
         let chunks = NotesGenerator.chunks(long)
         assert(chunks.map(\.count) == [10, 10, 5], "구간 크기 \(chunks.map(\.count))")
-        assert(NotesGenerator.format([long[11]]) == "[11:00] 상대: s11")
+        assert(NotesGenerator.format([long[11]]) == "[66:00] 상대: s11")
         assert(NotesGenerator.stripThinking("<think>hmm</think>\n## 요약") == "## 요약")
 
         // 2b. 저정보 줄 제거 + 같은 화자 병합

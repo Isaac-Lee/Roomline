@@ -14,9 +14,10 @@ enum NotesError: LocalizedError {
     }
 }
 
-/// 미팅 후에만 실행. 전사를 ~10분 구간으로 잘라 요약(map)한 뒤 합쳐서(reduce) 한국어 노트를 만든다.
+/// 미팅 후에만 실행. 1시간 이하면 전사 전체를 한 번에 정리하고, 더 길면 1시간 구간별 요약(map)을 합친다(reduce).
+/// 한 번에 넣는 편이 구간 요약 6번보다 2배 빠르고 노이즈도 적었다(gemma3:12b, 1시간 영어 전사 12.4분 → 6.1분).
 struct NotesGenerator {
-    static let chunkDuration: TimeInterval = 600
+    static let chunkDuration: TimeInterval = 3600
     static let endpoint = URL(string: "http://localhost:11434/api/chat")!
 
     let model: String
@@ -115,7 +116,7 @@ struct NotesGenerator {
                 ["role": "user", "content": user],
             ],
             // num_predict: 장황한 출력이 시간을 다 잡아먹는 것을 막는다.
-            "options": ["temperature": 0.2, "num_ctx": 8192, "num_predict": maxTokens],
+            "options": ["temperature": 0.2, "num_ctx": 24576, "num_predict": maxTokens],
         ]
         if unload { body["keep_alive"] = 0 }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -154,7 +155,7 @@ struct NotesGenerator {
     static let reducePrompt = """
     너는 회의록 작성자다. 사용자가 영어 또는 한국어 회의 전사, 혹은 구간별 요약을 준다. "나"는 노트 주인이고, 그 밖의 화자 이름("상대", "상대 2", 실제 이름)은 상대방이다.
     전체를 하나로 합쳐 아래 형식의 한국어 Markdown 미팅 노트만 출력해라. 구간별로 나누지 말고, 같은 내용은 하나로 합치고, 전사에 없는 내용은 지어내지 마라.
-    잡담성 반복은 버리고 결정·할 일·미해결만 남긴다. 고유명사·제품명·숫자·날짜는 원문 그대로 둔다. 액션아이템은 명시적으로 맡은 일만 쓰고(최대 10개, 같은 일은 하나로), 담당자는 전사·요약에 나온 실제 이름으로 쓴다. 노트 주인이면 "나"(예시 줄의 "나"도 이 규칙대로 실제 이름으로 바꾼다). 담당자가 불분명한 일은 액션아이템에 넣지 말고 미해결에 둔다.
+    잡담성 반복은 버리고 결정·할 일·미해결만 남긴다. 고유명사·제품명·숫자는 원문 그대로 두고, 날짜는 "11월 6일(목)"처럼 한국어로 쓰되 전사에 없는 연도는 붙이지 마라. 액션아이템은 명시적으로 맡은 일만 쓰고(최대 10개, 같은 일은 하나로), 담당자는 전사·요약에 나온 실제 이름으로 쓴다. 노트 주인이면 "나"(예시 줄의 "나"도 이 규칙대로 실제 이름으로 바꾼다). 담당자가 불분명한 일은 액션아이템에 넣지 말고 미해결에 둔다.
 
     ## 요약
     3~6줄 문단
