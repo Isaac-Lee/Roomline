@@ -22,7 +22,7 @@ enum TranscriptionError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .localeUnsupported: "이 Mac에서 선택한 영어 억양의 음성 인식을 지원하지 않습니다."
+        case .localeUnsupported: "선택한 언어의 음성 인식을 지원하지 않습니다."
         case .noAudioFormat: "음성 인식 오디오 포맷을 정하지 못했습니다."
         }
     }

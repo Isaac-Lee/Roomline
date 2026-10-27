@@ -22,6 +22,7 @@ struct RoomlineApp: App {
 
 private struct MenuContent: View {
     @Bindable var session: SessionController
+    @AppStorage(SettingsKey.meetingLanguage) private var meetingLanguage = "en"
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
 
@@ -29,12 +30,17 @@ private struct MenuContent: View {
         if let error = session.errorMessage {
             Text(error)
         }
-        if session.translationMissing {
+        if session.translationMissing && meetingLanguage == "en" {
             Button("한국어 번역 언어팩 없음 — 설정에서 다운로드…") { showSettings() }
         }
 
         switch session.state {
         case .idle:
+            Picker("미팅 언어", selection: $meetingLanguage) {
+                Text("영어").tag("en")
+                Text("한국어").tag("ko")
+            }
+            .pickerStyle(.menu)
             Button("미팅 시작") { Task { await session.start() } }
                 .keyboardShortcut("s", modifiers: [.control, .option])
         case .starting:

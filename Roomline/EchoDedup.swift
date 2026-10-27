@@ -2,7 +2,7 @@ import Foundation
 
 /// 마이크 채널이 스피커 소리를 다시 받아 적은 중복(에코)인지 텍스트로 판별한다.
 enum EchoDedup {
-    private static let fillers: Set<String> = ["uh", "um", "uhm", "hmm", "mm", "ah", "er"]
+    private static let fillers: Set<String> = ["uh", "um", "uhm", "hmm", "mm", "ah", "er", "음", "어"]
 
     static func words(_ text: String) -> [String] {
         text.lowercased()

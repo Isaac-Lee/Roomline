@@ -7,6 +7,7 @@ enum SettingsKey {
     static let translateMine = "translateMine"
     static let echoGate = "echoGate"
     static let remoteLocale = "remoteLocale"
+    static let meetingLanguage = "meetingLanguage"  // "en" | "ko"
     static let ollamaModel = "ollamaModel"
     static let defaultOllamaModel = "gemma3:12b"
 }
@@ -39,6 +40,7 @@ final class SessionController {
         UserDefaults.standard.register(defaults: [
             SettingsKey.echoGate: "auto",
             SettingsKey.remoteLocale: "en-US",
+            SettingsKey.meetingLanguage: "en",
             SettingsKey.translateMine: false,
             SettingsKey.ollamaModel: SettingsKey.defaultOllamaModel,
         ])
@@ -75,8 +77,10 @@ final class SessionController {
 
         let defaults = UserDefaults.standard
         let translateMine = defaults.bool(forKey: SettingsKey.translateMine)
-        let remote = AppleTranscriber(locale: Locale(identifier: defaults.string(forKey: SettingsKey.remoteLocale) ?? "en-US"))
-        let me = AppleTranscriber()
+        // 한국어 미팅이면 양쪽 모두 ko-KR, 번역은 하지 않는다.
+        let korean = defaults.string(forKey: SettingsKey.meetingLanguage) == "ko"
+        let remote = AppleTranscriber(locale: Locale(identifier: korean ? "ko-KR" : defaults.string(forKey: SettingsKey.remoteLocale) ?? "en-US"))
+        let me = AppleTranscriber(locale: Locale(identifier: korean ? "ko-KR" : "en-US"))
         var newStore: TranscriptStore?
         do {
             let format = try await remote.prepare()
@@ -119,7 +123,7 @@ final class SessionController {
         await refreshTranslationAvailability()
         let (finals, finalsContinuation) = AsyncStream<Segment>.makeStream()
         translationTask = Task { [overlay, store, translationMissing] in
-            let translator: Translator? = translationMissing ? nil : AppleTranslator()
+            let translator: Translator? = translationMissing || korean ? nil : AppleTranslator()
             // 한 루프에서 하나씩 처리해 도착 순서대로 번역이 붙는다.
             for await segment in finals {
                 guard let translator else { continue }

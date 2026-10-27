@@ -36,6 +36,12 @@ struct SelfCheck {
         let labeled = TranscriptStore.loadTranscript(in: store2.folder)
         assert(labeled.map(\.speakerName) == ["상대 1", "상대 2", "나"], "화자 이름 \(labeled.map(\.speakerName))")
         assert(TranscriptLine(segment: r1).speakerName == "상대")
+        var named = await store2.meta
+        named.speakerNames = [2: "Dana"]
+        try TranscriptStore.write(named, to: store2.folder)
+        assert(TranscriptStore.loadTranscript(in: store2.folder).map(\.speakerName) == ["상대 1", "Dana", "나"], "지정한 화자 이름")
+        let old = #"{"id":"\#(UUID().uuidString)","title":"t","startedAt":"2026-01-01T00:00:00Z","state":"done"}"#
+        assert((try? JSONDecoder.iso.decode(MeetingMeta.self, from: Data(old.utf8)))?.speakerNames == nil, "옛 meta 호환")
         try FileManager.default.removeItem(at: store2.folder)
 
         // 2. 10분 단위 구간 나누기
@@ -54,7 +60,13 @@ struct SelfCheck {
         assert(!EchoDedup.isEcho(me: "Let's move on to the budget review.", remote: remoteText), "무관한 문장 유지")
         assert(!EchoDedup.isEcho(me: "Uh, um.", remote: remoteText), "필러만 있으면 유지")
         assert(EchoDedup.isEcho(me: "Um, okay.", remote: "Okay."), "필러 무시 1단어 일치")
+        assert(EchoDedup.isEcho(me: "음, 다음 주 금요일까지 예산안을 정리하겠습니다.", remote: "다음 주 금요일까지 예산안을 정리하겠습니다"), "한국어 에코")
+        assert(!EchoDedup.isEcho(me: "그럼 배포 일정은 어떻게 되나요?", remote: "다음 주 금요일까지 예산안을 정리하겠습니다"), "한국어 무관 문장 유지")
 
         print("selfcheck OK")
     }
+}
+
+private extension JSONDecoder {
+    static var iso: JSONDecoder { let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d }
 }
