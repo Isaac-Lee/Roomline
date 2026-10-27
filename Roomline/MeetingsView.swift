@@ -32,6 +32,7 @@ struct MeetingsView: View {
         .onAppear(perform: reload)
         // 노트 생성이 끝나면 목록 상태를 갱신한다.
         .onChange(of: session.state) { reload() }
+        .onChange(of: session.notesJob) { reload() }
     }
 
     private func reload() {
@@ -68,8 +69,8 @@ private struct MeetingDetail: View {
                 Button("Finder에서 열기") { NSWorkspace.shared.activateFileViewerSelecting([record.folder]) }
                 Button(diarizing ? "화자 구분 중…" : "화자 구분") { diarize() }
                     .disabled(diarizing)
-                Button("노트 다시 만들기") { Task { await session.regenerateNotes(record) } }
-                    .disabled(session.state != .idle || lines.isEmpty)
+                Button("노트 다시 만들기") { session.regenerateNotes(record) }
+                    .disabled(session.notesJob == record.folder || lines.isEmpty)
             }
             if let diarizeError { Text(diarizeError).font(.caption).foregroundStyle(.red) }
             if !speakerNumbers.isEmpty {
@@ -84,9 +85,9 @@ private struct MeetingDetail: View {
                     if namesChanged {
                         Button("이름을 반영해 노트 다시 만들기") {
                             namesChanged = false
-                            Task { await session.regenerateNotes(record) }
+                            session.regenerateNotes(record)
                         }
-                        .disabled(session.state != .idle)
+                        .disabled(session.notesJob == record.folder)
                     }
                 }
             }
@@ -124,7 +125,8 @@ private struct MeetingDetail: View {
             }
         }
         .padding()
-        .task(id: session.state) {
+        // 노트 작업이 끝나면(notesJob이 바뀌면) 노트·전사를 다시 읽는다.
+        .task(id: session.notesJob) {
             notes = try? String(contentsOf: record.notesURL, encoding: .utf8)
             lines = TranscriptStore.loadTranscript(in: record.folder)
             names = TranscriptStore.readMeta(in: record.folder)?.speakerNames ?? [:]

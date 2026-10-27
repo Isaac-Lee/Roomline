@@ -12,7 +12,7 @@ enum SettingsKey {
     static let defaultOllamaModel = "gemma3:12b"
 }
 
-/// 한 미팅의 생명주기: idle → starting → recording → finalizing(노트 생성) → idle
+/// 한 미팅의 생명주기: idle → starting → recording → finalizing(세션 해제) → idle. 노트 생성은 백그라운드 큐가 따로 처리한다.
 @MainActor @Observable
 final class SessionController {
     enum State { case idle, starting, recording, finalizing }
@@ -20,6 +20,11 @@ final class SessionController {
     private(set) var state = State.idle
     private(set) var errorMessage: String?
     private(set) var notesProgress: String?
+    /// 지금 노트를 만드는 미팅 폴더. 큐에서 하나씩만 처리한다.
+    private(set) var notesJob: URL?
+    @ObservationIgnored private var notesTitle = ""
+    @ObservationIgnored private var pendingNotes: [(folder: URL, diarize: Bool)] = []
+    @ObservationIgnored private var notesWorker: Task<Void, Never>?
     /// 한국어 번역 언어팩이 없으면 자막만 띄우고 설치를 안내한다.
     private(set) var translationMissing = false
     /// 녹음 중 앱이 죽었거나 노트 생성이 실패한 미팅. 노트 생성을 다시 제안한다.
@@ -206,24 +211,39 @@ final class SessionController {
             $0.endedAt = .now
             $0.state = .finalizing
         }
-        // 화자 구분을 먼저 끝내야 노트에 "상대 1/2"가 들어간다. 실패해도 노트는 만든다.
-        notesProgress = "화자 구분 중…"
-        do {
-            _ = try await Diarizer.labelSpeakers(folder: store.folder)
-        } catch {
-            print("diarization failed:", error)
-        }
-        await generateNotes(folder: store.folder)
+        // 오디오/STT는 모두 해제됐으니 바로 새 미팅을 시작할 수 있다.
+        state = .idle
+        enqueueNotes(folder: store.folder, diarize: true)
     }
 
-    func regenerateNotes(_ record: MeetingRecord) async {
-        guard state == .idle else { return }
-        state = .finalizing
-        await generateNotes(folder: record.folder)
+    func regenerateNotes(_ record: MeetingRecord) {
+        enqueueNotes(folder: record.folder, diarize: false)
+    }
+
+    /// 노트 작업을 큐에 넣는다. 이미 대기/진행 중인 폴더는 무시.
+    /// 메모리: 노트 생성 중 새 미팅을 시작하면 STT + LLM(12B)이 함께 올라간다(~9GB). 감수한다.
+    private func enqueueNotes(folder: URL, diarize: Bool) {
+        guard notesJob != folder, !pendingNotes.contains(where: { $0.folder == folder }) else { return }
+        pendingNotes.append((folder, diarize))
+        if notesWorker == nil {
+            notesWorker = Task {
+                while !pendingNotes.isEmpty {
+                    let job = pendingNotes.removeFirst()
+                    notesJob = job.folder
+                    notesTitle = TranscriptStore.readMeta(in: job.folder)?.title ?? ""
+                    if job.diarize {
+                        // 화자 구분을 먼저 끝내야 노트에 "상대 1/2"가 들어간다. 실패해도 노트는 만든다.
+                        notesProgress = "화자 구분 중…"
+                        do { _ = try await Diarizer.labelSpeakers(folder: job.folder) } catch { print("diarization failed:", error) }
+                    }
+                    await generateNotes(folder: job.folder)
+                }
+                notesWorker = nil
+            }
+        }
     }
 
     private func generateNotes(folder: URL) async {
-        errorMessage = nil
         notesProgress = "노트 준비 중…"
         guard var meta = TranscriptStore.readMeta(in: folder) else {
             finishNotes()
@@ -250,8 +270,15 @@ final class SessionController {
 
     private func finishNotes() {
         notesProgress = nil
-        state = .idle
+        notesJob = nil
         refreshUnfinishedMeetings()
+    }
+
+    /// 메뉴에 보일 한 줄. 작업이 없으면 nil.
+    var notesStatus: String? {
+        guard notesJob != nil else { return nil }
+        let queued = pendingNotes.isEmpty ? "" : " (대기 \(pendingNotes.count))"
+        return "노트 생성 중: \(notesTitle) – \(notesProgress ?? "준비 중…")\(queued)"
     }
 
     private func captureFailed(_ error: Error) async {

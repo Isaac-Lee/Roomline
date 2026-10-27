@@ -49,12 +49,13 @@ private struct MenuContent: View {
             Button("미팅 종료하고 노트 만들기") { Task { await session.stop() } }
                 .keyboardShortcut("s", modifiers: [.control, .option])
         case .finalizing:
-            Text(session.notesProgress ?? "정리 중…")
+            Text("정리 중…")
         }
-        if session.state == .idle && !session.unfinishedMeetings.isEmpty {
+        if let status = session.notesStatus { Text(status) }
+        if !session.unfinishedMeetings.isEmpty {
             Menu("중단된 미팅 노트 만들기") {
                 ForEach(session.unfinishedMeetings) { record in
-                    Button(record.meta.title) { Task { await session.regenerateNotes(record) } }
+                    Button(record.meta.title) { session.regenerateNotes(record) }
                 }
             }
         }
