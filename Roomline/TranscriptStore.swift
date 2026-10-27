@@ -10,6 +10,11 @@ struct MeetingRecord: Identifiable {
 struct TranscriptLine: Identifiable {
     let segment: Segment
     var translation: String?
+    var remoteSpeaker: Int?   // 화자 구분 결과(1부터)
+    var speakerName: String {
+        if segment.speaker == .me { return "나" }
+        return remoteSpeaker.map { "상대 \($0)" } ?? "상대"
+    }
     var id: UUID { segment.id }
 }
 
@@ -53,6 +58,16 @@ actor TranscriptStore {
         }
     }
 
+    /// 끝난 미팅의 transcript.jsonl에 이벤트를 덧붙인다(화자 구분 결과용).
+    static func append(_ events: [TranscriptEvent], to folder: URL) throws {
+        var data = Data()
+        for event in events { data.append(try encoder.encode(event)); data.append(0x0A) }
+        let handle = try FileHandle(forWritingTo: folder.appending(path: "transcript.jsonl"))
+        defer { try? handle.close() }
+        try handle.seekToEnd()
+        try handle.write(contentsOf: data)
+    }
+
     func update(_ change: (inout MeetingMeta) -> Void) {
         change(&meta)
         try? Self.write(meta, to: folder)
@@ -91,6 +106,8 @@ actor TranscriptStore {
                 lines.append(TranscriptLine(segment: segment))
             case .translation(let id, let translation):
                 if let index = indexByID[id] { lines[index].translation = translation }
+            case .speakerLabel(let id, let speaker):
+                if let index = indexByID[id] { lines[index].remoteSpeaker = speaker }
             }
         }
         return lines.sorted { $0.segment.start < $1.segment.start }

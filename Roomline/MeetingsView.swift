@@ -55,6 +55,8 @@ private struct MeetingDetail: View {
     @State private var tab = 0
     @State private var notes: String?
     @State private var lines: [TranscriptLine] = []
+    @State private var diarizing = false
+    @State private var diarizeError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -62,9 +64,12 @@ private struct MeetingDetail: View {
                 Text(record.meta.title).font(.title2.bold())
                 Spacer()
                 Button("Finder에서 열기") { NSWorkspace.shared.activateFileViewerSelecting([record.folder]) }
+                Button(diarizing ? "화자 구분 중…" : "화자 구분") { diarize() }
+                    .disabled(diarizing)
                 Button("노트 다시 만들기") { Task { await session.regenerateNotes(record) } }
                     .disabled(session.state != .idle || lines.isEmpty)
             }
+            if let diarizeError { Text(diarizeError).font(.caption).foregroundStyle(.red) }
             Picker("", selection: $tab) {
                 Text("노트").tag(0)
                 Text("전사 (\(lines.count))").tag(1)
@@ -84,9 +89,9 @@ private struct MeetingDetail: View {
                         Text(NotesGenerator.clock(line.segment.start))
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
-                        Text(line.segment.speaker == .remote ? "상대" : "나")
+                        Text(line.speakerName)
                             .font(.caption.bold())
-                            .foregroundStyle(line.segment.speaker == .remote ? .blue : .green)
+                            .foregroundStyle(color(of: line))
                         VStack(alignment: .leading) {
                             Text(line.segment.text)
                             if let translation = line.translation {
@@ -102,6 +107,23 @@ private struct MeetingDetail: View {
         .task(id: session.state) {
             notes = try? String(contentsOf: record.notesURL, encoding: .utf8)
             lines = TranscriptStore.loadTranscript(in: record.folder)
+        }
+    }
+
+    private static let palette: [Color] = [.blue, .purple, .orange, .pink, .teal, .brown]
+
+    private func color(of line: TranscriptLine) -> Color {
+        if line.segment.speaker == .me { return .green }
+        return Self.palette[((line.remoteSpeaker ?? 1) - 1) % Self.palette.count]
+    }
+
+    private func diarize() {
+        diarizing = true
+        diarizeError = nil
+        Task {
+            do { _ = try await Diarizer.labelSpeakers(folder: record.folder) } catch { diarizeError = error.localizedDescription }
+            lines = TranscriptStore.loadTranscript(in: record.folder)
+            diarizing = false
         }
     }
 

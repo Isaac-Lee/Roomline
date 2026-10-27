@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A10000000000000000000011 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000010 /* FluidAudio */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		A10000000000000000000001 /* Roomline.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Roomline.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000000000000000000011 /* FluidAudio in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -64,6 +69,9 @@
 				A10000000000000000000002 /* Roomline */,
 			);
 			name = Roomline;
+			packageProductDependencies = (
+				A10000000000000000000010 /* FluidAudio */,
+			);
 			productName = Roomline;
 			productReference = A10000000000000000000001 /* Roomline.app */;
 			productType = "com.apple.product-type.application";
@@ -92,6 +100,9 @@
 				Base,
 			);
 			mainGroup = A10000000000000000000004;
+			packageReferences = (
+				A10000000000000000000012 /* XCRemoteSwiftPackageReference "FluidAudio" */,
+			);
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A10000000000000000000005 /* Products */;
@@ -216,6 +227,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A10000000000000000000012 /* XCRemoteSwiftPackageReference "FluidAudio" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/FluidInference/FluidAudio";
+			requirement = {
+				kind = exactVersion;
+				version = 0.17.7;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A10000000000000000000010 /* FluidAudio */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A10000000000000000000012 /* XCRemoteSwiftPackageReference "FluidAudio" */;
+			productName = FluidAudio;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A10000000000000000000009 /* Project object */;
 }

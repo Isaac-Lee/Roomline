@@ -25,6 +25,19 @@ struct SelfCheck {
         assert(TranscriptStore.list().contains { $0.id == id && $0.meta.state == .done }, "meta 목록")
         try FileManager.default.removeItem(at: store.folder)
 
+        // 1b. 화자 라벨 병합(마지막 라벨 우선), 라벨 없는 줄·내 발화 이름
+        let store2 = try TranscriptStore()
+        let r1 = Segment(id: UUID(), speaker: .remote, start: 0, end: 2, text: "A")
+        let r2 = Segment(id: UUID(), speaker: .remote, start: 3, end: 5, text: "B")
+        let m = Segment(id: UUID(), speaker: .me, start: 6, end: 7, text: "C")
+        for s in [r1, r2, m] { await store2.append(.segment(s)) }
+        try TranscriptStore.append([.speakerLabel(segmentID: r1.id, speaker: 1), .speakerLabel(segmentID: r2.id, speaker: 1),
+                                    .speakerLabel(segmentID: r2.id, speaker: 2)], to: store2.folder)
+        let labeled = TranscriptStore.loadTranscript(in: store2.folder)
+        assert(labeled.map(\.speakerName) == ["상대 1", "상대 2", "나"], "화자 이름 \(labeled.map(\.speakerName))")
+        assert(TranscriptLine(segment: r1).speakerName == "상대")
+        try FileManager.default.removeItem(at: store2.folder)
+
         // 2. 10분 단위 구간 나누기
         let long = (0..<25).map { i in
             TranscriptLine(segment: Segment(id: UUID(), speaker: .remote, start: Double(i * 60), end: Double(i * 60 + 5), text: "s\(i)"))
@@ -33,6 +46,14 @@ struct SelfCheck {
         assert(chunks.map(\.count) == [10, 10, 5], "구간 크기 \(chunks.map(\.count))")
         assert(NotesGenerator.format([long[11]]) == "[11:00] 상대: s11")
         assert(NotesGenerator.stripThinking("<think>hmm</think>\n## 요약") == "## 요약")
+
+        // 3. 에코 중복 판별
+        let remoteText = "I think we can do one that might be fun, if we have a little bit of time."
+        assert(EchoDedup.isEcho(me: "Uh, and I might be able to do one that might be fun.", remote: remoteText), "에코 제거")
+        assert(EchoDedup.isEcho(me: "If we have a little bit of time.", remote: remoteText), "에코 제거 2")
+        assert(!EchoDedup.isEcho(me: "Let's move on to the budget review.", remote: remoteText), "무관한 문장 유지")
+        assert(!EchoDedup.isEcho(me: "Uh, um.", remote: remoteText), "필러만 있으면 유지")
+        assert(EchoDedup.isEcho(me: "Um, okay.", remote: "Okay."), "필러 무시 1단어 일치")
 
         print("selfcheck OK")
     }

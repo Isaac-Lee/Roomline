@@ -13,6 +13,7 @@ struct Segment: Codable, Identifiable {
 enum TranscriptEvent: Codable {
     case segment(Segment)
     case translation(segmentID: UUID, text: String)
+    case speakerLabel(segmentID: UUID, speaker: Int)   // 미팅 후 화자 구분 결과(마지막 라벨이 우선)
 }
 
 enum MeetingState: String, Codable { case recording, finalizing, done, failed }

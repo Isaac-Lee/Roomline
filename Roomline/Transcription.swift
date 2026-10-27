@@ -22,13 +22,13 @@ enum TranscriptionError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .localeUnsupported: "이 Mac에서 영어(en-US) 음성 인식을 지원하지 않습니다."
+        case .localeUnsupported: "이 Mac에서 선택한 영어 억양의 음성 인식을 지원하지 않습니다."
         case .noAudioFormat: "음성 인식 오디오 포맷을 정하지 못했습니다."
         }
     }
 }
 
-/// SpeechAnalyzer + SpeechTranscriber(en-US). 채널 하나당 하나씩 만든다.
+/// SpeechAnalyzer + SpeechTranscriber. 채널 하나당 하나씩 만든다.
 final class AppleTranscriber: Transcriber, @unchecked Sendable {
     let updates: AsyncStream<TranscriptUpdate>
     private let updatesContinuation: AsyncStream<TranscriptUpdate>.Continuation
@@ -37,13 +37,17 @@ final class AppleTranscriber: Transcriber, @unchecked Sendable {
     private var analyzer: SpeechAnalyzer?
     private var resultsTask: Task<Void, Never>?
 
-    init() {
+    private let locale: Locale
+
+    init(locale: Locale = Locale(identifier: "en-US")) {
+        self.locale = locale
         (updates, updatesContinuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(64))
         (input, inputContinuation) = AsyncStream.makeStream()  // 버리면 오디오 타임라인이 어긋나므로 무제한
     }
 
     func prepare() async throws -> AVAudioFormat {
-        guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: Locale(identifier: "en-US")) else {
+        let requested = locale
+        guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: requested) else {
             throw TranscriptionError.localeUnsupported
         }
         let transcriber = SpeechTranscriber(

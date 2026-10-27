@@ -6,6 +6,7 @@ import Speech
 enum SettingsKey {
     static let translateMine = "translateMine"
     static let echoGate = "echoGate"
+    static let remoteLocale = "remoteLocale"
     static let ollamaModel = "ollamaModel"
     static let defaultOllamaModel = "gemma3:12b"
 }
@@ -27,13 +28,17 @@ final class SessionController {
     @ObservationIgnored private var capture: AudioCapture?
     @ObservationIgnored private var transcribers: [Speaker: Transcriber] = [:]
     @ObservationIgnored private var store: TranscriptStore?
+    @ObservationIgnored private var remoteRecorder: RemoteAudioRecorder?
     @ObservationIgnored private var updateTasks: [Task<Void, Never>] = []
     @ObservationIgnored private var translationTask: Task<Void, Never>?
     @ObservationIgnored private var hotKeys: HotKeys?
+    /// 최근 remote final (에코 판별용, 도착 시각 기준 ~15초만 유지)
+    @ObservationIgnored private var recentRemote: [(text: String, at: Date)] = []
 
     init() {
         UserDefaults.standard.register(defaults: [
             SettingsKey.echoGate: "auto",
+            SettingsKey.remoteLocale: "en-US",
             SettingsKey.translateMine: false,
             SettingsKey.ollamaModel: SettingsKey.defaultOllamaModel,
         ])
@@ -71,29 +76,38 @@ final class SessionController {
 
         let defaults = UserDefaults.standard
         let translateMine = defaults.bool(forKey: SettingsKey.translateMine)
-        let remote = AppleTranscriber()
+        let remote = AppleTranscriber(locale: Locale(identifier: defaults.string(forKey: SettingsKey.remoteLocale) ?? "en-US"))
         let me = AppleTranscriber()
+        var newStore: TranscriptStore?
         do {
             let format = try await remote.prepare()
             _ = try await me.prepare()
+            let store = try TranscriptStore()
+            newStore = store
+            // 미팅 후 화자 구분용. 녹음 실패는 자막을 막지 않는다.
+            let recorder = try? RemoteAudioRecorder(folder: store.folder, format: format)
             let capture = AudioCapture(
                 targetFormat: format,
                 echoMode: defaults.string(forKey: SettingsKey.echoGate) ?? "auto",
-                onBuffer: { speaker, buffer in (speaker == .remote ? remote : me).append(buffer) },
+                onBuffer: { speaker, buffer in
+                    if speaker == .remote {
+                        recorder?.append(buffer)
+                        remote.append(buffer)
+                    } else {
+                        me.append(buffer)
+                    }
+                },
                 onError: { [weak self] error in Task { @MainActor in await self?.captureFailed(error) } })
             try await capture.start()
-            // 캡처가 실제로 시작된 뒤에 폴더를 만들어, 실패한 시작이 빈 미팅으로 남지 않게 한다.
-            do {
-                store = try TranscriptStore()
-            } catch {
-                await capture.stop()
-                throw error
-            }
+            self.store = store
+            self.remoteRecorder = recorder
             self.capture = capture
             transcribers = [.remote: remote, .me: me]
         } catch {
             await remote.finish()
             await me.finish()
+            // 실패한 시작이 빈 미팅으로 남지 않게 지운다.
+            if let folder = newStore?.folder { try? FileManager.default.removeItem(at: folder) }
             state = .idle
             errorMessage = error.localizedDescription
             return
@@ -117,16 +131,38 @@ final class SessionController {
         }
 
         updateTasks = transcribers.map { speaker, transcriber in
-            Task { [overlay, store] in
-                for await update in transcriber.updates {
-                    switch update {
-                    case .volatile(let text):
-                        overlay.showVolatile(text, speaker: speaker)
-                    case .final(let text, let start, let end):
-                        let segment = Segment(id: UUID(), speaker: speaker, start: start, end: end, text: text)
-                        overlay.appendFinal(segment)
-                        await store?.append(.segment(segment))
-                        if speaker == .remote || translateMine { finalsContinuation.yield(segment) }
+            Task { [weak self, overlay, store] in
+                @MainActor func commit(_ segment: Segment) async {
+                    overlay.appendFinal(segment)
+                    await store?.append(.segment(segment))
+                    if speaker == .remote || translateMine { finalsContinuation.yield(segment) }
+                }
+                // 보류 중인 me 세그먼트까지 끝나야 이 Task가 끝나므로 종료 때 마지막 문장도 저장된다.
+                await withDiscardingTaskGroup { group in
+                    for await update in transcriber.updates {
+                        switch update {
+                        case .volatile(let text):
+                            overlay.showVolatile(text, speaker: speaker)
+                        case .final(let text, let start, let end):
+                            let segment = Segment(id: UUID(), speaker: speaker, start: start, end: end, text: text)
+                            let arrived = Date()
+                            if speaker == .remote {
+                                self?.recentRemote.removeAll { arrived.timeIntervalSince($0.at) > 15 }
+                                self?.recentRemote.append((text, arrived))
+                                await commit(segment)
+                                continue
+                            }
+                            // me는 2초 보류: 그 사이 도착한 remote와 [-6s,+2s] 안에서 비슷하면 에코로 버린다.
+                            // 보류는 별도 Task라 다음 me 미리보기를 막지 않는다.
+                            group.addTask { @MainActor in
+                                try? await Task.sleep(for: .seconds(2))
+                                let isEcho = self?.recentRemote.contains {
+                                    $0.at.timeIntervalSince(arrived) >= -6 && $0.at.timeIntervalSince(arrived) <= 2
+                                        && EchoDedup.isEcho(me: text, remote: $0.text)
+                                } ?? false
+                                if !isEcho { await commit(segment) }
+                            }
+                        }
                     }
                 }
             }
@@ -145,6 +181,8 @@ final class SessionController {
         guard state == .recording else { return }
         state = .finalizing
         await capture?.stop()
+        remoteRecorder?.close()
+        remoteRecorder = nil
         for transcriber in transcribers.values { await transcriber.finish() }
         for task in updateTasks { await task.value }
         await translationTask?.value
@@ -160,6 +198,13 @@ final class SessionController {
         await store.update {
             $0.endedAt = .now
             $0.state = .finalizing
+        }
+        // 화자 구분을 먼저 끝내야 노트에 "상대 1/2"가 들어간다. 실패해도 노트는 만든다.
+        notesProgress = "화자 구분 중…"
+        do {
+            _ = try await Diarizer.labelSpeakers(folder: store.folder)
+        } catch {
+            print("diarization failed:", error)
         }
         await generateNotes(folder: store.folder)
     }

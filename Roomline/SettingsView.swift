@@ -5,6 +5,7 @@ struct SettingsView: View {
     @Bindable var session: SessionController
     @AppStorage(SettingsKey.translateMine) private var translateMine = false
     @AppStorage(SettingsKey.echoGate) private var echoGate = "auto"
+    @AppStorage(SettingsKey.remoteLocale) private var remoteLocale = "en-US"
     @AppStorage(SettingsKey.ollamaModel) private var ollamaModel = SettingsKey.defaultOllamaModel
     @State private var download: TranslationSession.Configuration?
     @State private var downloadError: String?
@@ -28,10 +29,18 @@ struct SettingsView: View {
                     Text("항상 켬").tag("on")
                     Text("끔").tag("off")
                 }
+                Picker("상대 영어 억양", selection: $remoteLocale) {
+                    Text("미국 (en-US)").tag("en-US")
+                    Text("인도 (en-IN)").tag("en-IN")
+                    Text("영국 (en-GB)").tag("en-GB")
+                    Text("호주 (en-AU)").tag("en-AU")
+                    Text("싱가포르 (en-SG)").tag("en-SG")
+                    Text("캐나다 (en-CA)").tag("en-CA")
+                }
             } header: {
                 Text("음성")
             } footer: {
-                Text("스피커로 들으면 상대 발화가 \"나\"로 중복될 수 있어 상대 소리가 날 때 마이크를 무시합니다. 자동은 출력 장치가 바뀌면 미팅 중에도 따라갑니다. 켬/끔은 다음 미팅부터 적용됩니다.")
+                Text("스피커로 들으면 상대 발화가 \"나\"로 중복될 수 있어 상대 소리가 날 때 마이크를 무시합니다. 자동은 출력 장치가 바뀌면 미팅 중에도 따라갑니다. 켬/끔과 상대 영어 억양은 다음 미팅부터 적용됩니다.")
             }
 
             Section("번역") {
