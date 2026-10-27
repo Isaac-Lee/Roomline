@@ -33,7 +33,7 @@ final class SessionController {
 
     init() {
         UserDefaults.standard.register(defaults: [
-            SettingsKey.echoGate: false,
+            SettingsKey.echoGate: "auto",
             SettingsKey.translateMine: false,
             SettingsKey.ollamaModel: SettingsKey.defaultOllamaModel,
         ])
@@ -78,7 +78,7 @@ final class SessionController {
             _ = try await me.prepare()
             let capture = AudioCapture(
                 targetFormat: format,
-                echoGate: defaults.bool(forKey: SettingsKey.echoGate),
+                echoMode: defaults.string(forKey: SettingsKey.echoGate) ?? "auto",
                 onBuffer: { speaker, buffer in (speaker == .remote ? remote : me).append(buffer) },
                 onError: { [weak self] error in Task { @MainActor in await self?.captureFailed(error) } })
             try await capture.start()

@@ -20,7 +20,10 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
     private let queue = DispatchQueue(label: "roomline.audio-capture")
     private let remote: ChannelConverter
     private let me: ChannelConverter
-    private let echoGate: Bool
+    private let echoMode: String   // "auto" | "on" | "off"
+    private var echoGate = false      // queue에서만 접근
+    private var outputDeviceID = AudioObjectID(kAudioObjectUnknown)
+    private var outputListener: AudioObjectPropertyListenerBlock?
     private let onBuffer: @Sendable (Speaker, AVAudioPCMBuffer) -> Void
     private let onError: @Sendable (Error) -> Void
     private var stream: SCStream?
@@ -30,13 +33,14 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
 
     init(
         targetFormat: AVAudioFormat,
-        echoGate: Bool,
+        echoMode: String,
         onBuffer: @escaping @Sendable (Speaker, AVAudioPCMBuffer) -> Void,
         onError: @escaping @Sendable (Error) -> Void
     ) {
         remote = ChannelConverter(target: targetFormat)
         me = ChannelConverter(target: targetFormat)
-        self.echoGate = echoGate
+        self.echoMode = echoMode
+        echoGate = Self.shouldGate(echoMode)
         self.onBuffer = onBuffer
         self.onError = onError
     }
@@ -67,10 +71,12 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
         self.stream = stream
         self.config = config
         observeDefaultInputDevice()
+        if echoMode == "auto" { queue.async { self.observeOutput() } }
     }
 
     func stop() async {
         removeDeviceListener()
+        queue.sync { removeOutputListener() }
         try? await stream?.stopCapture()
         stream = nil
     }
@@ -129,6 +135,84 @@ final class AudioCapture: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked
             print("microphone switch failed:", error)
         }
     }
+
+    // MARK: 에코 게이트 자동 판단 (출력 장치가 스피커일 때만)
+
+    static func shouldGate(_ mode: String) -> Bool {
+        switch mode {
+        case "on": return true
+        case "off": return false
+        default: return isSpeakerOutput()
+        }
+    }
+
+    private static let headphonesSource: UInt32 = 0x6864706E   // 'hdpn'
+
+    private static func u32(_ id: AudioObjectID, _ selector: AudioObjectPropertySelector,
+                            _ scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> UInt32? {
+        var address = AudioObjectPropertyAddress(mSelector: selector, mScope: scope, mElement: kAudioObjectPropertyElementMain)
+        var value: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        return AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value) == noErr ? value : nil
+    }
+
+    /// 기본 출력 장치가 스피커(내장 스피커·HDMI·DisplayPort·AirPlay)면 true. 블루투스·USB·헤드폰은 false.
+    static func isSpeakerOutput() -> Bool {
+        let system = AudioObjectID(kAudioObjectSystemObject)
+        guard let device = u32(system, kAudioHardwarePropertyDefaultOutputDevice),
+              let transport = u32(device, kAudioDevicePropertyTransportType) else { return false }
+        switch transport {
+        case kAudioDeviceTransportTypeBuiltIn:
+            let source = u32(device, kAudioDevicePropertyDataSource, kAudioObjectPropertyScopeOutput)
+            return source != headphonesSource
+        case kAudioDeviceTransportTypeHDMI, kAudioDeviceTransportTypeDisplayPort, kAudioDeviceTransportTypeAirPlay:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// queue에서 호출. 기본 출력 장치 변경과 현재 장치의 데이터 소스(헤드폰 꽂기/뽑기) 변경을 감시한다.
+    private func observeOutput() {
+        let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in self?.outputChanged() }
+        outputListener = listener
+        var address = Self.defaultOutputAddress
+        AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, queue, listener)
+        outputChanged()
+    }
+
+    private func outputChanged() {
+        // 장치가 바뀌었으면 데이터 소스 리스너를 새 장치로 옮긴다.
+        let device = Self.u32(AudioObjectID(kAudioObjectSystemObject), kAudioHardwarePropertyDefaultOutputDevice) ?? 0
+        if device != outputDeviceID, let listener = outputListener {
+            var address = Self.dataSourceAddress
+            AudioObjectRemovePropertyListenerBlock(outputDeviceID, &address, queue, listener)
+            outputDeviceID = device
+            AudioObjectAddPropertyListenerBlock(device, &address, queue, listener)
+        }
+        let gate = Self.isSpeakerOutput()
+        if gate != echoGate { print("echo gate", gate ? "on (speaker)" : "off (not speaker)") }
+        echoGate = gate
+    }
+
+    private func removeOutputListener() {
+        guard let listener = outputListener else { return }
+        var address = Self.defaultOutputAddress
+        AudioObjectRemovePropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, queue, listener)
+        address = Self.dataSourceAddress
+        AudioObjectRemovePropertyListenerBlock(outputDeviceID, &address, queue, listener)
+        outputListener = nil
+    }
+
+    private static let defaultOutputAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain)
+
+    private static let dataSourceAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioDevicePropertyDataSource,
+        mScope: kAudioObjectPropertyScopeOutput,
+        mElement: kAudioObjectPropertyElementMain)
 
     private static let defaultInputAddress = AudioObjectPropertyAddress(
         mSelector: kAudioHardwarePropertyDefaultInputDevice,

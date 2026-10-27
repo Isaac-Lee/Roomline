@@ -4,7 +4,7 @@ import Translation
 struct SettingsView: View {
     @Bindable var session: SessionController
     @AppStorage(SettingsKey.translateMine) private var translateMine = false
-    @AppStorage(SettingsKey.echoGate) private var echoGate = false
+    @AppStorage(SettingsKey.echoGate) private var echoGate = "auto"
     @AppStorage(SettingsKey.ollamaModel) private var ollamaModel = SettingsKey.defaultOllamaModel
     @State private var download: TranslationSession.Configuration?
     @State private var downloadError: String?
@@ -23,11 +23,15 @@ struct SettingsView: View {
 
             Section {
                 Toggle("내 발화도 한국어로 번역", isOn: $translateMine)
-                Toggle("에코 게이트: 상대 소리가 날 때 마이크 무시", isOn: $echoGate)
+                Picker("에코 게이트", selection: $echoGate) {
+                    Text("자동(스피커로 들을 때만)").tag("auto")
+                    Text("항상 켬").tag("on")
+                    Text("끔").tag("off")
+                }
             } header: {
                 Text("음성")
             } footer: {
-                Text("스피커로 들으면 상대 발화가 \"나\"로 중복될 수 있습니다. 이어폰을 쓰지 않을 때만 켜세요. 다음 미팅부터 적용됩니다.")
+                Text("스피커로 들으면 상대 발화가 \"나\"로 중복될 수 있어 상대 소리가 날 때 마이크를 무시합니다. 자동은 출력 장치가 바뀌면 미팅 중에도 따라갑니다. 켬/끔은 다음 미팅부터 적용됩니다.")
             }
 
             Section("번역") {
