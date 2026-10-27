@@ -1,0 +1,74 @@
+import SwiftUI
+import Translation
+
+struct SettingsView: View {
+    @Bindable var session: SessionController
+    @AppStorage(SettingsKey.translateMine) private var translateMine = false
+    @AppStorage(SettingsKey.echoGate) private var echoGate = false
+    @AppStorage(SettingsKey.ollamaModel) private var ollamaModel = SettingsKey.defaultOllamaModel
+    @State private var download: TranslationSession.Configuration?
+    @State private var downloadError: String?
+
+    var body: some View {
+        Form {
+            Section("자막 패널") {
+                Slider(value: $session.overlay.fontSize, in: 12...36, step: 1) {
+                    Text("글자 크기 \(Int(session.overlay.fontSize))")
+                }
+                Slider(value: $session.overlay.backgroundOpacity, in: 0.2...1) {
+                    Text("배경 불투명도 \(Int(session.overlay.backgroundOpacity * 100))%")
+                }
+                Toggle("클릭 통과 (⌃⌥X)", isOn: $session.overlay.clickThrough)
+            }
+
+            Section {
+                Toggle("내 발화도 한국어로 번역", isOn: $translateMine)
+                Toggle("에코 게이트: 상대 소리가 날 때 마이크 무시", isOn: $echoGate)
+            } header: {
+                Text("음성")
+            } footer: {
+                Text("스피커로 들으면 상대 발화가 \"나\"로 중복될 수 있습니다. 이어폰을 쓰지 않을 때만 켜세요. 다음 미팅부터 적용됩니다.")
+            }
+
+            Section("번역") {
+                if session.translationMissing {
+                    HStack {
+                        Text("영어 → 한국어 언어팩이 설치되어 있지 않습니다.")
+                        Spacer()
+                        Button("다운로드") {
+                            downloadError = nil
+                            if download == nil {
+                                download = .init(source: AppleTranslator.source, target: AppleTranslator.target)
+                            } else {
+                                download?.invalidate()
+                            }
+                        }
+                    }
+                    if let downloadError { Text(downloadError).foregroundStyle(.red) }
+                } else {
+                    Label("영어 → 한국어 언어팩 설치됨", systemImage: "checkmark.circle")
+                }
+            }
+
+            Section {
+                TextField("Ollama 모델", text: $ollamaModel)
+            } header: {
+                Text("미팅 노트")
+            } footer: {
+                Text("`ollama pull \(ollamaModel)`로 먼저 받아 두세요. 노트는 미팅 폴더의 notes.md에 저장됩니다.")
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 460)
+        // 시스템 다운로드 확인 창을 띄우려면 SwiftUI 뷰에 붙은 세션이 필요하다.
+        .translationTask(download) { translation in
+            do {
+                try await translation.prepareTranslation()
+            } catch {
+                downloadError = error.localizedDescription
+            }
+            await session.refreshTranslationAvailability()
+        }
+        .task { await session.refreshTranslationAvailability() }
+    }
+}

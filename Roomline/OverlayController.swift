@@ -1,10 +1,8 @@
 import AppKit
 import SwiftUI
 
-enum Speaker: String, Codable { case remote, me }
-
 struct CaptionLine: Identifiable {
-    let id = UUID()
+    let id: UUID
     let speaker: Speaker
     let text: String
     var translation: String?
@@ -14,13 +12,23 @@ struct CaptionLine: Identifiable {
 @MainActor @Observable
 final class OverlayController {
     private(set) var lines: [CaptionLine] = []
-    private(set) var volatileText = ""
+    /// 화자별 확정 전 미리보기
+    private(set) var volatileText: [Speaker: String] = [:]
 
     var isVisible = true {
         didSet { isVisible ? panel.orderFrontRegardless() : panel.orderOut(nil) }
     }
-    var clickThrough = false {
-        didSet { panel.ignoresMouseEvents = clickThrough }
+    var clickThrough = UserDefaults.standard.bool(forKey: "overlay.clickThrough") {
+        didSet {
+            panel.ignoresMouseEvents = clickThrough
+            UserDefaults.standard.set(clickThrough, forKey: "overlay.clickThrough")
+        }
+    }
+    var fontSize = UserDefaults.standard.object(forKey: "overlay.fontSize") as? Double ?? 18 {
+        didSet { UserDefaults.standard.set(fontSize, forKey: "overlay.fontSize") }
+    }
+    var backgroundOpacity = UserDefaults.standard.object(forKey: "overlay.opacity") as? Double ?? 0.72 {
+        didSet { UserDefaults.standard.set(backgroundOpacity, forKey: "overlay.opacity") }
     }
 
     @ObservationIgnored private let panel: NSPanel
@@ -42,20 +50,20 @@ final class OverlayController {
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = false
+        panel.ignoresMouseEvents = clickThrough
+        panel.setFrameAutosaveName("CaptionsPanel")
         panel.contentView = NSHostingView(rootView: CaptionsView(overlay: self))
         panel.orderFrontRegardless()
     }
 
-    func showVolatile(_ text: String) {
-        volatileText = text
+    func showVolatile(_ text: String, speaker: Speaker) {
+        volatileText[speaker] = text
     }
 
-    func appendFinal(_ text: String, speaker: Speaker) -> CaptionLine.ID {
-        volatileText = ""
-        let line = CaptionLine(speaker: speaker, text: text)
-        lines.append(line)
+    func appendFinal(_ segment: Segment) {
+        volatileText[segment.speaker] = nil
+        lines.append(CaptionLine(id: segment.id, speaker: segment.speaker, text: segment.text))
         if lines.count > maxLines { lines.removeFirst(lines.count - maxLines) }
-        return line.id
     }
 
     func setTranslation(_ text: String, for id: CaptionLine.ID) {
@@ -65,7 +73,7 @@ final class OverlayController {
 
     func clear() {
         lines = []
-        volatileText = ""
+        volatileText = [:]
     }
 }
 
@@ -75,26 +83,32 @@ private struct CaptionsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ForEach(overlay.lines) { line in
-                row(label: line.speaker == .remote ? "상대" : "나", text: line.text, color: .white,
+                row(label: label(line.speaker), text: line.text, color: .white,
                     translation: line.translation)
             }
-            if !overlay.volatileText.isEmpty {
-                row(label: "상대", text: overlay.volatileText, color: .gray, translation: nil)
+            ForEach([Speaker.remote, .me], id: \.self) { speaker in
+                if let text = overlay.volatileText[speaker], !text.isEmpty {
+                    row(label: label(speaker), text: text, color: .gray, translation: nil)
+                }
             }
-            if overlay.lines.isEmpty && overlay.volatileText.isEmpty {
+            if overlay.lines.isEmpty && overlay.volatileText.values.allSatisfy(\.isEmpty) {
                 Text("자막 대기 중").foregroundStyle(.gray)
             }
         }
-        .font(.system(size: 18))
+        .font(.system(size: overlay.fontSize))
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         .padding(16)
-        .background(.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 12))
+        .background(.black.opacity(overlay.backgroundOpacity), in: RoundedRectangle(cornerRadius: 12))
         .environment(\.colorScheme, .dark)
+    }
+
+    private func label(_ speaker: Speaker) -> String {
+        speaker == .remote ? "상대" : "나"
     }
 
     private func row(label: String, text: String, color: Color, translation: String?) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(label).font(.system(size: 12, weight: .bold)).foregroundStyle(.secondary)
+            Text(label).font(.system(size: overlay.fontSize * 0.65, weight: .bold)).foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
                 Text(text).foregroundStyle(color)
                 if let translation {
