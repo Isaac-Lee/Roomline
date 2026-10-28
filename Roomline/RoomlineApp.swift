@@ -1,9 +1,17 @@
+import AppIntents
 import Carbon.HIToolbox
 import SwiftUI
 
 @main
 struct RoomlineApp: App {
-    @State private var session = SessionController()
+    @State private var session: SessionController
+
+    init() {
+        let session = SessionController()
+        _session = State(initialValue: session)
+        // Siri 인텐트가 같은 세션을 쓰도록 등록한다.
+        AppDependencyManager.shared.add(dependency: session)
+    }
 
     var body: some Scene {
         MenuBarExtra {

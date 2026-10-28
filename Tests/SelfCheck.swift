@@ -73,6 +73,11 @@ struct SelfCheck {
         assert(EchoDedup.isEcho(me: "음, 다음 주 금요일까지 예산안을 정리하겠습니다.", remote: "다음 주 금요일까지 예산안을 정리하겠습니다"), "한국어 에코")
         assert(!EchoDedup.isEcho(me: "그럼 배포 일정은 어떻게 되나요?", remote: "다음 주 금요일까지 예산안을 정리하겠습니다"), "한국어 무관 문장 유지")
 
+        // 5. Siri가 읽는 액션아이템
+        let sample = "## 결정사항\n- A\n\n## 액션아이템\n- [ ] 나: PR 올리기 (11월 6일)\n- [ ] Maria: 실험 계획\n\n## 미해결 논의\n- 없음\n"
+        assert(NotesGenerator.actionItems(in: sample) == "나: PR 올리기 (11월 6일)\nMaria: 실험 계획", NotesGenerator.actionItems(in: sample))
+        assert(NotesGenerator.actionItems(in: "## 액션아이템\n- 없음\n") == "마지막 미팅에 액션아이템이 없습니다.")
+
         print("selfcheck OK")
     }
 }

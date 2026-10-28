@@ -54,6 +54,18 @@ struct NotesGenerator {
         return "# \(meta.title)\n\n- 일시: \(date) (\(duration)분)\n- 모델: \(model)\n\n\(body)\n"
     }
 
+    // MARK: 노트 읽기
+
+    /// "## 액션아이템" 섹션의 항목만 뽑아 읽기 좋게 만든다.
+    static func actionItems(in notes: String) -> String {
+        let section = notes.components(separatedBy: "## 액션아이템").dropFirst().first?
+            .components(separatedBy: "\n## ").first ?? ""
+        let items = section.split(separator: "\n")
+            .map { $0.replacing("- [ ]", with: "").replacing("- [x]", with: "").trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && $0 != "- 없음" && $0 != "없음" }
+        return items.isEmpty ? "마지막 미팅에 액션아이템이 없습니다." : items.joined(separator: "\n")
+    }
+
     // MARK: 전사 가공
 
     private static let fillers: Set<String> = ["uh", "um", "uhm", "hmm", "mm", "ah", "er", "음", "어"]
