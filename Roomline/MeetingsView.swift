@@ -22,7 +22,7 @@ struct MeetingsView: View {
             }
         } detail: {
             if let record = records.first(where: { $0.id == selection }) {
-                MeetingDetail(record: record, session: session)
+                MeetingDetail(record: record, session: session, onChange: reload)
                     .id(record.id)
             } else {
                 Text("미팅을 선택하세요").foregroundStyle(.secondary)
@@ -37,7 +37,7 @@ struct MeetingsView: View {
 
     private func reload() {
         records = TranscriptStore.list()
-        if selection == nil { selection = records.first?.id }
+        if !records.contains(where: { $0.id == selection }) { selection = records.first?.id }
     }
 
     private func stateLabel(_ state: MeetingState) -> String {
@@ -53,7 +53,10 @@ struct MeetingsView: View {
 private struct MeetingDetail: View {
     let record: MeetingRecord
     let session: SessionController
+    let onChange: () -> Void
     @State private var tab = 0
+    @State private var title = ""
+    @State private var confirmDelete = false
     @State private var notes: String?
     @State private var lines: [TranscriptLine] = []
     @State private var diarizing = false
@@ -64,8 +67,19 @@ private struct MeetingDetail: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(record.meta.title).font(.title2.bold())
+                TextField("미팅 이름", text: $title)
+                    .textFieldStyle(.plain)
+                    .font(.title2.bold())
+                    .onSubmit(rename)
+                    .disabled(busy)
                 Spacer()
+                Button("삭제", systemImage: "trash", role: .destructive) { confirmDelete = true }
+                    .disabled(busy)
+                    .confirmationDialog("이 미팅을 휴지통으로 옮길까요?", isPresented: $confirmDelete) {
+                        Button("휴지통으로 이동", role: .destructive, action: delete)
+                    } message: {
+                        Text("전사·노트·녹음이 함께 이동합니다. 휴지통에서 되살릴 수 있습니다.")
+                    }
                 Button("Finder에서 열기") { NSWorkspace.shared.activateFileViewerSelecting([record.folder]) }
                 Button(diarizing ? "화자 구분 중…" : "화자 구분") { diarize() }
                     .disabled(diarizing)
@@ -130,7 +144,32 @@ private struct MeetingDetail: View {
             notes = try? String(contentsOf: record.notesURL, encoding: .utf8)
             lines = TranscriptStore.loadTranscript(in: record.folder)
             names = TranscriptStore.readMeta(in: record.folder)?.speakerNames ?? [:]
+            title = TranscriptStore.readMeta(in: record.folder)?.title ?? record.meta.title
         }
+    }
+
+    private var busy: Bool { session.isBusy(record.folder) }
+
+    /// meta.json의 제목과 노트 첫 줄("# 제목")을 함께 바꾼다.
+    private func rename() {
+        let newTitle = title.trimmingCharacters(in: .whitespaces)
+        guard !newTitle.isEmpty, var meta = TranscriptStore.readMeta(in: record.folder) else { return }
+        meta.title = newTitle
+        try? TranscriptStore.write(meta, to: record.folder)
+        if let notes, notes.hasPrefix("# ") {
+            let body = notes.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).dropFirst().joined()
+            let renamed = "# \(newTitle)\n" + body
+            try? renamed.write(to: record.notesURL, atomically: true, encoding: .utf8)
+            self.notes = renamed
+        }
+        onChange()
+    }
+
+    /// 지우지 않고 휴지통으로 옮겨 되살릴 수 있게 한다.
+    private func delete() {
+        try? FileManager.default.trashItem(at: record.folder, resultingItemURL: nil)
+        session.refreshUnfinishedMeetings()
+        onChange()
     }
 
     private var speakerNumbers: [Int] { Array(Set(lines.compactMap(\.remoteSpeaker))).sorted() }

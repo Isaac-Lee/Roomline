@@ -216,6 +216,11 @@ final class SessionController {
         enqueueNotes(folder: store.folder, diarize: true)
     }
 
+    /// 지금 녹음 중이거나 노트를 만드는 미팅은 지우거나 이름을 바꾸면 안 된다.
+    func isBusy(_ folder: URL) -> Bool {
+        (state != .idle && store?.folder == folder) || notesJob == folder || pendingNotes.contains { $0.folder == folder }
+    }
+
     func regenerateNotes(_ record: MeetingRecord) {
         enqueueNotes(folder: record.folder, diarize: false)
     }
