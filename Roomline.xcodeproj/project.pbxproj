@@ -238,6 +238,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Roomline-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Roomline;
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "내 발화를 자막으로 만들기 위해 마이크를 사용합니다.";
@@ -260,6 +261,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Roomline-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Roomline;
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "내 발화를 자막으로 만들기 위해 마이크를 사용합니다.";

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Siri가 한국어로 "룸라인"이라고 불러도 이 앱을 찾게 한다. -->
+	<key>INAlternativeAppNames</key>
+	<array>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>룸라인</string>
+			<key>INAlternativeAppNamePronunciationHint</key>
+			<string>룸라인</string>
+		</dict>
+	</array>
+</dict>
+</plist>
