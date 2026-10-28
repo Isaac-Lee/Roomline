@@ -38,14 +38,13 @@ final class OverlayController {
         let size = NSSize(width: 760, height: 300)
         let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let origin = NSPoint(x: screen.midX - size.width / 2, y: screen.minY + 40)
-        panel = NSPanel(
+        panel = CaptionsPanel(
             contentRect: NSRect(origin: origin, size: size),
             styleMask: [.borderless, .nonactivatingPanel, .resizable],
             backing: .buffered, defer: false)
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.sharingType = .none
-        panel.isMovableByWindowBackground = true
         panel.hidesOnDeactivate = false
         panel.backgroundColor = .clear
         panel.isOpaque = false
@@ -74,6 +73,19 @@ final class OverlayController {
     func clear() {
         lines = []
         volatileText = [:]
+    }
+}
+
+/// SwiftUI 뷰가 마우스를 먹어 isMovableByWindowBackground가 안 먹히므로 창에서 직접 끌어서 옮긴다.
+/// 가장자리 8pt는 크기 조절용으로 남긴다.
+private final class CaptionsPanel: NSPanel {
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .leftMouseDown,
+           NSRect(origin: .zero, size: frame.size).insetBy(dx: 8, dy: 8).contains(event.locationInWindow) {
+            performDrag(with: event)
+            return
+        }
+        super.sendEvent(event)
     }
 }
 
