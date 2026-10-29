@@ -8,6 +8,8 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.meetingLanguage) private var meetingLanguage = "en"
     @AppStorage(SettingsKey.remoteLocale) private var remoteLocale = "en-US"
     @AppStorage(SettingsKey.ollamaModel) private var ollamaModel = SettingsKey.defaultOllamaModel
+    @AppStorage(SettingsKey.notesEngine) private var notesEngine = "ollama"
+    @AppStorage(SettingsKey.claudeModel) private var claudeModel = "sonnet"
     @State private var download: TranslationSession.Configuration?
     @State private var downloadError: String?
 
@@ -75,11 +77,25 @@ struct SettingsView: View {
             }
 
             Section {
-                TextField("Ollama 모델", text: $ollamaModel)
+                Picker("엔진", selection: $notesEngine) {
+                    Text("Ollama (로컬)").tag("ollama")
+                    Text("Claude (구독)").tag("claude")
+                }
+                if notesEngine == "claude" {
+                    Picker("Claude 모델", selection: $claudeModel) {
+                        Text("Sonnet").tag("sonnet")
+                        Text("Haiku (빠름)").tag("haiku")
+                        Text("Opus").tag("opus")
+                    }
+                } else {
+                    TextField("Ollama 모델", text: $ollamaModel)
+                }
             } header: {
                 Text("미팅 노트")
             } footer: {
-                Text("`ollama pull \(ollamaModel)`로 먼저 받아 두세요. 노트는 미팅 폴더의 notes.md에 저장됩니다.")
+                Text(notesEngine == "claude"
+                     ? "Claude Code CLI(`claude`)에 로그인된 구독을 씁니다. 전사가 Anthropic으로 전송됩니다. 노트는 미팅 폴더의 notes.md에 저장됩니다."
+                     : "`ollama pull \(ollamaModel)`로 먼저 받아 두세요. 메모리가 부족하면 gemma3:4b처럼 작은 모델을 쓰세요. 노트는 미팅 폴더의 notes.md에 저장됩니다.")
             }
         }
         .formStyle(.grouped)

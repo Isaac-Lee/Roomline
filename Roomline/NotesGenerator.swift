@@ -4,12 +4,14 @@ enum NotesError: LocalizedError {
     case emptyTranscript
     case ollamaUnavailable
     case ollama(String)
+    case claude(String)
 
     var errorDescription: String? {
         switch self {
         case .emptyTranscript: "전사 내용이 없습니다."
         case .ollamaUnavailable: "Ollama에 연결할 수 없습니다. `ollama serve`가 실행 중인지 확인하세요 (localhost:11434)."
         case .ollama(let message): "Ollama 오류: \(message)"
+        case .claude(let message): "Claude 오류: \(message)"
         }
     }
 }
@@ -21,6 +23,8 @@ struct NotesGenerator {
     static let endpoint = URL(string: "http://localhost:11434/api/chat")!
 
     let model: String
+    /// true면 Ollama 대신 Claude Code CLI(`claude -p`)로 Claude 구독 모델을 쓴다. 로컬 메모리를 쓰지 않는다.
+    var claude = false
 
     func generate(
         meta: MeetingMeta,
@@ -116,6 +120,7 @@ struct NotesGenerator {
     }
 
     private func chat(system: String, user: String, unload: Bool, maxTokens: Int) async throws -> String {
+        if claude { return try await claudeChat(system: system, user: user) }
         var request = URLRequest(url: Self.endpoint, timeoutInterval: 600)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -142,6 +147,39 @@ struct NotesGenerator {
         let response = try JSONDecoder().decode(ChatResponse.self, from: data)
         if let error = response.error { throw NotesError.ollama(error) }
         return Self.stripThinking(response.message?.content ?? "")
+    }
+
+    // MARK: Claude
+
+    /// 로그인 셸로 PATH를 잡아 `claude`를 찾는다. 사용자 설정·훅·MCP·도구를 모두 끄고 텍스트만 받는다.
+    private func claudeChat(system: String, user: String) async throws -> String {
+        let input = FileManager.default.temporaryDirectory.appending(path: "roomline-\(UUID().uuidString).txt")
+        try user.write(to: input, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: input) }
+
+        let process = Process()
+        process.executableURL = URL(filePath: "/bin/zsh")
+        process.arguments = ["-lc", "exec claude \"$@\"", "claude",
+                             "-p", "--model", model, "--system-prompt", system,
+                             "--setting-sources", "", "--tools", "", "--strict-mcp-config", "--no-session-persistence"]
+        process.currentDirectoryURL = FileManager.default.temporaryDirectory
+        process.standardInput = try FileHandle(forReadingFrom: input)
+        let out = Pipe(), err = Pipe()
+        process.standardOutput = out
+        process.standardError = err
+        try process.run()
+        let (output, errors) = await Task.detached {
+            (out.fileHandleForReading.readDataToEndOfFile(), err.fileHandleForReading.readDataToEndOfFile())
+        }.value
+        process.waitUntilExit()
+
+        let text = String(decoding: output, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard process.terminationStatus == 0 else {
+            if process.terminationStatus == 127 { throw NotesError.claude("`claude` CLI를 찾을 수 없습니다. Claude Code를 설치하고 `claude`로 로그인하세요.") }
+            let message = String(decoding: errors, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            throw NotesError.claude(message.isEmpty ? text : message)
+        }
+        return text
     }
 
     /// 추론형 모델이 내놓는 <think>…</think>를 떼어 낸다.

@@ -10,6 +10,8 @@ enum SettingsKey {
     static let meetingLanguage = "meetingLanguage"  // "en" | "ko"
     static let ollamaModel = "ollamaModel"
     static let defaultOllamaModel = "gemma3:12b"
+    static let notesEngine = "notesEngine"  // "ollama" | "claude"
+    static let claudeModel = "claudeModel"  // claude CLI 모델 별칭
 }
 
 /// 한 미팅의 생명주기: idle → starting → recording → finalizing(세션 해제) → idle. 노트 생성은 백그라운드 큐가 따로 처리한다.
@@ -48,6 +50,8 @@ final class SessionController {
             SettingsKey.meetingLanguage: "en",
             SettingsKey.translateMine: false,
             SettingsKey.ollamaModel: SettingsKey.defaultOllamaModel,
+            SettingsKey.notesEngine: "ollama",
+            SettingsKey.claudeModel: "sonnet",
         ])
         AVCaptureDevice.requestAccess(for: .audio) { _ in }
         refreshUnfinishedMeetings()
@@ -258,9 +262,11 @@ final class SessionController {
         if meta.endedAt == nil {
             meta.endedAt = meta.startedAt.addingTimeInterval(lines.last?.segment.end ?? 0)
         }
-        let model = UserDefaults.standard.string(forKey: SettingsKey.ollamaModel) ?? SettingsKey.defaultOllamaModel
+        let defaults = UserDefaults.standard
+        let claude = defaults.string(forKey: SettingsKey.notesEngine) == "claude"
+        let model = defaults.string(forKey: claude ? SettingsKey.claudeModel : SettingsKey.ollamaModel) ?? SettingsKey.defaultOllamaModel
         do {
-            let notes = try await NotesGenerator(model: model).generate(meta: meta, lines: lines) { [weak self] progress in
+            let notes = try await NotesGenerator(model: model, claude: claude).generate(meta: meta, lines: lines) { [weak self] progress in
                 self?.notesProgress = progress
             }
             try notes.write(to: folder.appending(path: "notes.md"), atomically: true, encoding: .utf8)
