@@ -60,6 +60,7 @@
 				A10000000000000000000007 /* Sources */,
 				A10000000000000000000003 /* Frameworks */,
 				A10000000000000000000008 /* Resources */,
+				A10000000000000000000013 /* Install to /Applications */,
 			);
 			buildRules = (
 			);
@@ -123,6 +124,28 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		A10000000000000000000013 /* Install to /Applications */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Install to /Applications";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Keep one installed Roomline: copy each build over /Applications/Roomline.app.\n# Run Script phases run before Xcode signs the app (and its Debug dylib), so sign the copy ourselves.\nset -e\nDEST=\"/Applications/$FULL_PRODUCT_NAME\"\nrm -rf \"$DEST\"\nditto \"$CODESIGNING_FOLDER_PATH\" \"$DEST\"\nENT=\"$TARGET_TEMP_DIR/$FULL_PRODUCT_NAME.xcent\"\ncodesign --force --deep --sign \"$EXPANDED_CODE_SIGN_IDENTITY\" --timestamp=none ${ENT:+$( [ -f \"$ENT\" ] && echo --entitlements \"$ENT\")} \"$DEST\"\nLSREG=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister\n\"$LSREG\" -f \"$DEST\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		A10000000000000000000007 /* Sources */ = {
@@ -237,6 +260,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Roomline-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Roomline;
@@ -260,6 +284,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				ENABLE_HARDENED_RUNTIME = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Roomline-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Roomline;
