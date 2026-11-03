@@ -9,7 +9,8 @@ struct SettingsView: View {
     @AppStorage(SettingsKey.remoteLocale) private var remoteLocale = "en-US"
     @AppStorage(SettingsKey.ollamaModel) private var ollamaModel = SettingsKey.defaultOllamaModel
     @AppStorage(SettingsKey.notesEngine) private var notesEngine = "ollama"
-    @AppStorage(SettingsKey.claudeModel) private var claudeModel = "sonnet"
+    @AppStorage(SettingsKey.claudeModel) private var claudeModel = "claude-opus-5-5"
+    @AppStorage(SettingsKey.claudeEffort) private var claudeEffort = "medium"
     @State private var download: TranslationSession.Configuration?
     @State private var downloadError: String?
 
@@ -83,9 +84,17 @@ struct SettingsView: View {
                 }
                 if notesEngine == "claude" {
                     Picker("Claude 모델", selection: $claudeModel) {
-                        Text("Sonnet").tag("sonnet")
-                        Text("Haiku (빠름)").tag("haiku")
-                        Text("Opus").tag("opus")
+                        Text("Opus 5.5").tag("claude-opus-5-5")
+                        Text("Sonnet 5.5").tag("claude-sonnet-5-5")
+                        Text("Haiku 5.5 (빠름)").tag("claude-haiku-5-5")
+                        Text("Fable 5.1").tag("claude-fable-5-1")
+                    }
+                    Picker("추론 레벨", selection: $claudeEffort) {
+                        Text("낮음").tag("low")
+                        Text("중간").tag("medium")
+                        Text("높음").tag("high")
+                        Text("매우 높음").tag("xhigh")
+                        Text("최대").tag("max")
                     }
                 } else {
                     TextField("Ollama 모델", text: $ollamaModel)

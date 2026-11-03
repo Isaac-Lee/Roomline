@@ -25,6 +25,8 @@ struct NotesGenerator {
     let model: String
     /// true면 Ollama 대신 Claude Code CLI(`claude -p`)로 Claude 구독 모델을 쓴다. 로컬 메모리를 쓰지 않는다.
     var claude = false
+    /// claude CLI `--effort` (low…max).
+    var effort = "medium"
 
     func generate(
         meta: MeetingMeta,
@@ -160,7 +162,7 @@ struct NotesGenerator {
         let process = Process()
         process.executableURL = URL(filePath: "/bin/zsh")
         process.arguments = ["-lc", "exec claude \"$@\"", "claude",
-                             "-p", "--model", model, "--system-prompt", system,
+                             "-p", "--model", model, "--effort", effort, "--system-prompt", system,
                              "--setting-sources", "", "--tools", "", "--strict-mcp-config", "--no-session-persistence"]
         process.currentDirectoryURL = FileManager.default.temporaryDirectory
         process.standardInput = try FileHandle(forReadingFrom: input)
