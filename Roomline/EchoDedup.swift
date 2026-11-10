@@ -4,6 +4,7 @@ import Foundation
 enum EchoDedup {
     private static let fillers: Set<String> = ["uh", "um", "uhm", "hmm", "mm", "ah", "er", "음", "어"]
 
+    /// 소문자 단어 목록(필러 제외). 노트용 저정보 줄 판별에도 쓴다.
     static func words(_ text: String) -> [String] {
         text.lowercased()
             .split { !$0.isLetter && !$0.isNumber && $0 != "'" }

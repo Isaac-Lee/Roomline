@@ -143,8 +143,9 @@ private struct MeetingDetail: View {
         .task(id: session.notesJob) {
             notes = try? String(contentsOf: record.notesURL, encoding: .utf8)
             lines = TranscriptStore.loadTranscript(in: record.folder)
-            names = TranscriptStore.readMeta(in: record.folder)?.speakerNames ?? [:]
-            title = TranscriptStore.readMeta(in: record.folder)?.title ?? record.meta.title
+            let meta = TranscriptStore.readMeta(in: record.folder)
+            names = meta?.speakerNames ?? [:]
+            title = meta?.title ?? record.meta.title
         }
     }
 
@@ -191,7 +192,7 @@ private struct MeetingDetail: View {
         diarizing = true
         diarizeError = nil
         Task {
-            do { _ = try await Diarizer.labelSpeakers(folder: record.folder) } catch { diarizeError = error.localizedDescription }
+            do { try await Diarizer.labelSpeakers(folder: record.folder) } catch { diarizeError = error.localizedDescription }
             lines = TranscriptStore.loadTranscript(in: record.folder)
             names = TranscriptStore.readMeta(in: record.folder)?.speakerNames ?? [:]
             diarizing = false

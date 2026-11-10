@@ -74,15 +74,12 @@ struct NotesGenerator {
 
     // MARK: 전사 가공
 
-    private static let fillers: Set<String> = ["uh", "um", "uhm", "hmm", "mm", "ah", "er", "음", "어"]
-
     /// 정보량 낮은 줄(필러 제외 3단어 미만, 숫자 없음)을 버리고, 같은 화자의 연속 줄은 한 줄로 합친다.
     static func condense(_ lines: [TranscriptLine]) -> [TranscriptLine] {
         var out: [TranscriptLine] = []
         for line in lines {
             let text = line.segment.text
-            let words = text.split { !$0.isLetter && !$0.isNumber && $0 != "'" }.filter { !fillers.contains($0.lowercased()) }
-            guard words.count >= 3 || text.contains(where: \.isNumber) else { continue }
+            guard EchoDedup.words(text).count >= 3 || text.contains(where: \.isNumber) else { continue }
             if var last = out.last, last.speakerName == line.speakerName {
                 let s = last.segment
                 last = TranscriptLine(segment: Segment(id: s.id, speaker: s.speaker, start: s.start, end: line.segment.end, text: s.text + " " + text),

@@ -12,7 +12,7 @@ enum VoiceProfiles {
     // ponytail: FluidAudio 군집 기준(유클리드 0.6 ≈ 코사인 0.82)에서 잡은 값. 실제 통화로 보정 필요.
     static let matchThreshold: Float = 0.8
 
-    static var fileURL = URL.applicationSupportDirectory.appending(path: "MeetingCaptions/voices.json")
+    static let fileURL = URL.applicationSupportDirectory.appending(path: "MeetingCaptions/voices.json")
 
     static func normalized(_ v: [Float]) -> [Float] {
         let norm = v.reduce(0) { $0 + $1 * $1 }.squareRoot()

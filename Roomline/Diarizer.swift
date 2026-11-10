@@ -10,8 +10,8 @@ enum Diarizer {
         var errorDescription: String? { "상대 음성 녹음이 없어 화자를 구분할 수 없습니다." }
     }
 
-    /// 구분된 화자 수를 돌려준다. 모델은 첫 실행 때 내려받는다.
-    static func labelSpeakers(folder: URL) async throws -> Int {
+    /// 모델은 첫 실행 때 내려받는다.
+    static func labelSpeakers(folder: URL) async throws {
         let caf = folder.appending(path: RemoteAudioRecorder.fileName)
         let m4a = folder.appending(path: "remote.m4a")
         let fm = FileManager.default
@@ -59,7 +59,6 @@ enum Diarizer {
         }
 
         if audio == caf, (try? compress(caf, to: m4a)) != nil { try? fm.removeItem(at: caf) }
-        return numbers.count
     }
 
     /// caf → AAC m4a(16 kHz 모노 32 kbps). 결과 파일이 비어 있으면 실패로 본다.

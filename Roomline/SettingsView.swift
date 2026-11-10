@@ -40,14 +40,14 @@ struct SettingsView: View {
                     Text("끔").tag("off")
                 }
                 if meetingLanguage == "en" {
-                Picker("상대 영어 억양", selection: $remoteLocale) {
-                    Text("미국 (en-US)").tag("en-US")
-                    Text("인도 (en-IN)").tag("en-IN")
-                    Text("영국 (en-GB)").tag("en-GB")
-                    Text("호주 (en-AU)").tag("en-AU")
-                    Text("싱가포르 (en-SG)").tag("en-SG")
-                    Text("캐나다 (en-CA)").tag("en-CA")
-                }
+                    Picker("상대 영어 억양", selection: $remoteLocale) {
+                        Text("미국 (en-US)").tag("en-US")
+                        Text("인도 (en-IN)").tag("en-IN")
+                        Text("영국 (en-GB)").tag("en-GB")
+                        Text("호주 (en-AU)").tag("en-AU")
+                        Text("싱가포르 (en-SG)").tag("en-SG")
+                        Text("캐나다 (en-CA)").tag("en-CA")
+                    }
                 }
             } header: {
                 Text("음성")
@@ -56,25 +56,25 @@ struct SettingsView: View {
             }
 
             if meetingLanguage == "en" {
-            Section("번역") {
-                if session.translationMissing {
-                    HStack {
-                        Text("영어 → 한국어 언어팩이 설치되어 있지 않습니다.")
-                        Spacer()
-                        Button("다운로드") {
-                            downloadError = nil
-                            if download == nil {
-                                download = .init(source: AppleTranslator.source, target: AppleTranslator.target)
-                            } else {
-                                download?.invalidate()
+                Section("번역") {
+                    if session.translationMissing {
+                        HStack {
+                            Text("영어 → 한국어 언어팩이 설치되어 있지 않습니다.")
+                            Spacer()
+                            Button("다운로드") {
+                                downloadError = nil
+                                if download == nil {
+                                    download = .init(source: AppleTranslator.source, target: AppleTranslator.target)
+                                } else {
+                                    download?.invalidate()
+                                }
                             }
                         }
+                        if let downloadError { Text(downloadError).foregroundStyle(.red) }
+                    } else {
+                        Label("영어 → 한국어 언어팩 설치됨", systemImage: "checkmark.circle")
                     }
-                    if let downloadError { Text(downloadError).foregroundStyle(.red) }
-                } else {
-                    Label("영어 → 한국어 언어팩 설치됨", systemImage: "checkmark.circle")
                 }
-            }
             }
 
             Section {
