@@ -1,13 +1,8 @@
 import Foundation
 import Translation
 
-/// Ollama 기반 번역기 등으로 교체할 수 있게 둔 경계.
-protocol Translator: Sendable {
-    func translate(_ text: String) async throws -> String
-}
-
 /// Apple 온디바이스 번역 (en → ko). 언어팩이 설치돼 있어야 한다.
-actor AppleTranslator: Translator {
+actor AppleTranslator {
     static let source = Locale.Language(identifier: "en")
     static let target = Locale.Language(identifier: "ko")
 

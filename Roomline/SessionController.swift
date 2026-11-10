@@ -35,7 +35,7 @@ final class SessionController {
     var overlay = OverlayController()
 
     @ObservationIgnored private var capture: AudioCapture?
-    @ObservationIgnored private var transcribers: [Speaker: Transcriber] = [:]
+    @ObservationIgnored private var transcribers: [Speaker: AppleTranscriber] = [:]
     @ObservationIgnored private var store: TranscriptStore?
     @ObservationIgnored private var remoteRecorder: RemoteAudioRecorder?
     @ObservationIgnored private var updateTasks: [Task<Void, Never>] = []
@@ -134,7 +134,7 @@ final class SessionController {
         await refreshTranslationAvailability()
         let (finals, finalsContinuation) = AsyncStream<Segment>.makeStream()
         translationTask = Task { [overlay, store, translationMissing] in
-            let translator: Translator? = translationMissing || korean ? nil : AppleTranslator()
+            let translator: AppleTranslator? = translationMissing || korean ? nil : AppleTranslator()
             // 한 루프에서 하나씩 처리해 도착 순서대로 번역이 붙는다.
             for await segment in finals {
                 guard let translator else { continue }
@@ -245,7 +245,7 @@ final class SessionController {
                     if job.diarize {
                         // 화자 구분을 먼저 끝내야 노트에 "상대 1/2"가 들어간다. 실패해도 노트는 만든다.
                         notesProgress = "화자 구분 중…"
-                        do { _ = try await Diarizer.labelSpeakers(folder: job.folder) } catch { print("diarization failed:", error) }
+                        do { try await Diarizer.labelSpeakers(folder: job.folder) } catch { print("diarization failed:", error) }
                     }
                     await generateNotes(folder: job.folder)
                 }

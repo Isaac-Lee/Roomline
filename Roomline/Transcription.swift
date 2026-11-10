@@ -7,16 +7,6 @@ enum TranscriptUpdate: Sendable {
     case final(text: String, start: TimeInterval, end: TimeInterval)
 }
 
-/// WhisperKit 등으로 교체할 수 있게 둔 경계.
-protocol Transcriber: AnyObject, Sendable {
-    /// 모델을 준비하고, append로 넣어줄 오디오 포맷을 돌려준다.
-    func prepare() async throws -> AVAudioFormat
-    var updates: AsyncStream<TranscriptUpdate> { get }
-    /// prepare가 돌려준 포맷의 버퍼. 아무 스레드에서나 호출 가능.
-    func append(_ buffer: AVAudioPCMBuffer)
-    func finish() async
-}
-
 enum TranscriptionError: LocalizedError {
     case localeUnsupported, noAudioFormat
 
@@ -29,7 +19,7 @@ enum TranscriptionError: LocalizedError {
 }
 
 /// SpeechAnalyzer + SpeechTranscriber. 채널 하나당 하나씩 만든다.
-final class AppleTranscriber: Transcriber, @unchecked Sendable {
+final class AppleTranscriber: @unchecked Sendable {
     let updates: AsyncStream<TranscriptUpdate>
     private let updatesContinuation: AsyncStream<TranscriptUpdate>.Continuation
     private let input: AsyncStream<AnalyzerInput>
@@ -39,15 +29,15 @@ final class AppleTranscriber: Transcriber, @unchecked Sendable {
 
     private let locale: Locale
 
-    init(locale: Locale = Locale(identifier: "en-US")) {
+    init(locale: Locale) {
         self.locale = locale
         (updates, updatesContinuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(64))
         (input, inputContinuation) = AsyncStream.makeStream()  // 버리면 오디오 타임라인이 어긋나므로 무제한
     }
 
+    /// 모델을 준비하고, append로 넣어줄 오디오 포맷을 돌려준다.
     func prepare() async throws -> AVAudioFormat {
-        let requested = locale
-        guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: requested) else {
+        guard let locale = await SpeechTranscriber.supportedLocale(equivalentTo: locale) else {
             throw TranscriptionError.localeUnsupported
         }
         let transcriber = SpeechTranscriber(
@@ -92,6 +82,7 @@ final class AppleTranscriber: Transcriber, @unchecked Sendable {
         return format
     }
 
+    /// prepare가 돌려준 포맷의 버퍼. 아무 스레드에서나 호출 가능.
     func append(_ buffer: AVAudioPCMBuffer) {
         inputContinuation.yield(AnalyzerInput(buffer: buffer))
     }
